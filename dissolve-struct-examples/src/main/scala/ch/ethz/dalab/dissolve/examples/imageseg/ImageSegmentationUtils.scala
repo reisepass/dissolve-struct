@@ -18,6 +18,8 @@ import ch.ethz.dalab.dissolve.classification.StructSVMModel
 import java.io.PrintWriter
 import java.awt.image.DataBufferByte
 
+
+
 object ImageSegmentationUtils {
 
   // Size of super-pixels
