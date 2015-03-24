@@ -19,9 +19,163 @@ import java.awt.image.DataBufferInt
 import ch.ethz.dalab.dissolve.examples.imageseg
 import org.apache.log4j.PropertyConfigurator
 import org.apache.spark.sql.catalyst.expressions.IsNull
+import scala.collection.mutable.HashMap
+import scala.util.Random
+import scala.collection.mutable.HashSet
 
 
+//TODO the metaData is hacky think of something nicer.
+class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, Object] = new HashMap[String,Object](),  
+        initVecDat: Array[DataType] = null, initMatData : Array[Array[Array[DataType]]]= null, isNominal : Boolean=false)(implicit m: ClassManifest[DataType]) {
 
+
+  def meta = metaData
+  val dims = if (dimPerCoord.length == 1) new DenseVector[Int](Array(dimPerCoord(0), dimPerCoord(0), dimPerCoord(0))) else dimPerCoord
+  def xDim = dims(0)
+  def yDim = dims(1)
+  def zDim = dims(2)
+  var myData: Array[Array[Array[DataType]]] = new Array[Array[Array[DataType]]](dims(0)) 
+  assert(dims.size == 3)
+   for (x <- 0 until dims(0)) {
+    myData(x) = new Array[Array[DataType]](dims(1))
+    for (y <- 0 until dims(1)) {
+      myData(x)(y) = new Array[DataType](dims(2))
+    }
+  }
+  if(initVecDat != null){
+    assert(initMatData ==null)
+    assert(initVecDat.length == dims(0)*dims(1)*dims(2))
+    reshape(initVecDat)
+  }
+  if(initMatData !=null){
+    assert(initVecDat ==null)
+    assert(initMatData.length == dims(0))
+    assert(initMatData(0).length == dims(1))
+    assert(initMatData(0)(0).length == dims(2))
+      for (x <- 0 until dims(0)) {  
+      for (y <- 0 until dims(1)) {
+          for (z <- 0 until dims(2)) {
+            myData(x)(y)(z) = initMatData(x)(y)(z);
+          }
+        }
+      }
+
+  }
+  
+  var classFreq = new HashMap[DataType,Double]  
+  if(isNominal){
+    classFreq = findAllClasses() 
+  }
+  def frequencies = if(isNominal) classFreq else null
+  def classSet = if(isNominal) classFreq.keySet else null
+  
+  
+
+  def reshape(inData: Array[DataType]) {
+    reshape(new DenseVector(inData))
+  }
+  def reshape(inData: Vector[DataType]) {
+    var vCounter = 0;
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          myData(x)(y)(z) = inData(vCounter)
+          vCounter += 1
+        }
+      }
+    }
+  }
+  def melt(): Array[DataType] = {
+    
+    var outVector = new Array[DataType](dims(0)*dims(1)*dims(2))
+    var vCounter = 0
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          outVector(vCounter) = myData(x)(y)(z) 
+          vCounter += 1
+        }
+      }
+    }
+    outVector
+  }
+  
+  def get(x : Int, y: Int, z: Int) : DataType = {
+    myData(x)(y)(z)
+  }
+  def set(x : Int, y: Int, z: Int, newVal : DataType){
+    myData(x)(y)(z) = newVal
+  }
+  
+  
+  def equals ( other : ThreeDimMat[DataType] ) : Boolean ={
+    
+    
+    if(this.xDim != other.xDim)
+      return false
+    if(this.yDim != other.yDim)
+      return false
+    if(this.zDim != other.zDim)
+      return false
+    
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          if(this.get(x,y,z)!=other.get(x,y,z))
+            return false
+        }
+      }
+    }
+    
+    return true
+  }
+  
+  def dimAgree[G >: DataType] (other : ThreeDimMat[G]) : Boolean = {
+        if( other.xDim != this.xDim)
+          return false
+        if( other.yDim != this.yDim)
+          return false
+        if( other.zDim != this.zDim)
+          return false
+        true
+  }
+  
+  //Warning, if this method is evoced on non Nominal data it will douplicate the entire dataset 
+
+    def findAllClasses() : HashMap[DataType,Double] = {
+      assert(isNominal)
+     // var classSet = new HashSet[DataType];  
+      var classCount = new HashMap[DataType,Int]
+      var totalCount =0;
+      for (x <- 0 until dims(0)) {
+        for (y <- 0 until dims(1)) {
+          for (z <- 0 until dims(2)) {
+            classCount.update(this.get(x,y,z), classCount.getOrElse(this.get(x,y,z), 0) + 1)
+            totalCount+=1
+          }
+        }
+      }
+      
+     var classFreq = new HashMap[DataType, Double]
+     classCount.foreach { case (key, value) => classFreq.put(key,(value.asInstanceOf[Double]/totalCount)) }
+     classFreq
+   }
+  
+  
+  
+  
+
+}
+
+
+/*
+//TODO I dont know how to make a variable size Matrix out of arrays. the issue is I need to specify the Array[]type without knowing it 
+class HighDimMat[MatStruct, DataType](numCoords: Int, dimPerCoord: Vector[Int], metaData: HashMap[String, Object]) {
+  var myData: MatStruct
+
+}
+* 
+*/
 
 object ThreeDimUtils {
   val LABEL_PIVOTE = 50;
@@ -43,76 +197,69 @@ object ThreeDimUtils {
     if (howMuchNoise > 0) {
       for {
         x <- idxs; y <- idxs; z <- idxs //TODO change this to lazy sequence 
-      } myMatrix(x)(y)(z) = min(max( (myMatrix(x)(y)(z) + Math.abs(howMuchNoise * (Math.random() * 255) - Math.abs(howMuchNoise * (Math.random() * 255)) ).asInstanceOf[Int]) , 1),255);
+      } myMatrix(x)(y)(z) = min(max((myMatrix(x)(y)(z) + Math.abs(howMuchNoise * (Math.random() * 255) - Math.abs(howMuchNoise * (Math.random() * 255))).asInstanceOf[Int]), 1), 255);
     }
 
     (myMatrix, myLabels)
   }
-  
-  
-  def unsignedByte( in : Int) : Int = { 
+
+  def unsignedByte(in: Int): Int = {
     in & 0xFF
   }
-  
-//                                                                                       x     y     z      hist
-  def hist3d (dataIn : Array[Array[Array[Int]]], numBins : Int, superPixSize : Int) : Array[Array[Array[Array[Int]]]] = {
-    val xDim = dataIn.length; 
+
+  //                                                                                       x     y     z      hist
+  def hist3d(dataIn: Array[Array[Array[Int]]], numBins: Int, superPixSize: Int): Array[Array[Array[Array[Int]]]] = {
+    val xDim = dataIn.length;
     val yDim = dataIn(0).length;
-    val zDim = dataIn(0)(0).length; 
-    
+    val zDim = dataIn(0)(0).length;
+
     assert(xDim == yDim && yDim == zDim) //TODO this may not be needed 
-    
+
     //var outHist = new Array[Array[Array[Array[Int]]]](xDim)
-    
-    
-    val numSupPixelPerX =  floor(xDim / superPixSize)
-  
+
+    val numSupPixelPerX = floor(xDim / superPixSize)
+
     val numSupPixelPerY = floor(yDim / superPixSize)
     val numSupPixelPerZ = floor(zDim / superPixSize)
-    
-    var outHist = Array.fill(numSupPixelPerX, numSupPixelPerY ,numSupPixelPerZ, numBins)(0)
-    
-    val extraPix = xDim - numSupPixelPerX*superPixSize
-    assert( extraPix>=0)
-    
-    val histBinSize = 255/numBins  //TODO verify with dataformat, throw exception of not max value 
-              
-    
-    def patchHist ( x: Int, y : Int,z :Int ): Array[Int] = {
+
+    var outHist = Array.fill(numSupPixelPerX, numSupPixelPerY, numSupPixelPerZ, numBins)(0)
+
+    val extraPix = xDim - numSupPixelPerX * superPixSize
+    assert(extraPix >= 0)
+
+    val histBinSize = 255 / numBins //TODO verify with dataformat, throw exception of not max value 
+
+    def patchHist(x: Int, y: Int, z: Int): Array[Int] = {
       var localHist = new Array[Int](numBins);
       for {
-        xIdx <- x until (x+numSupPixelPerX); yIdx <- y until (y+numSupPixelPerX); zIdx <-0 until (z+numSupPixelPerX) 
-      } { 
-        var insertIDX = floor((dataIn(xIdx)(yIdx)(zIdx))/histBinSize).asInstanceOf[Int] 
-        if(insertIDX == numBins)
-          insertIDX = insertIDX -1; 
-          if( floor((dataIn(xIdx)(yIdx)(zIdx))/histBinSize).asInstanceOf[Int] > localHist.length){
-             val primDebug =dataIn(xIdx)(yIdx)(zIdx)
-             val prim2 = (dataIn(xIdx)(yIdx)(zIdx))
-             val prim3 =(Int.MaxValue)
-            print ( numBins)
-          }
-          if(floor( (dataIn(xIdx)(yIdx)(zIdx))/histBinSize).asInstanceOf[Int] <0){
-            print(numBins)
-          }
-           println(floor( (dataIn(xIdx)(yIdx)(zIdx))/histBinSize).asInstanceOf[Int])
-          localHist( insertIDX) += 1
+        xIdx <- x until (x + numSupPixelPerX); yIdx <- y until (y + numSupPixelPerX); zIdx <- 0 until (z + numSupPixelPerX)
+      } {
+        var insertIDX = floor((dataIn(xIdx)(yIdx)(zIdx)) / histBinSize).asInstanceOf[Int]
+        if (insertIDX == numBins)
+          insertIDX = insertIDX - 1;
+        if (floor((dataIn(xIdx)(yIdx)(zIdx)) / histBinSize).asInstanceOf[Int] > localHist.length) {
+          val primDebug = dataIn(xIdx)(yIdx)(zIdx)
+          val prim2 = (dataIn(xIdx)(yIdx)(zIdx))
+          val prim3 = (Int.MaxValue)
+          print(numBins)
         }
+        if (floor((dataIn(xIdx)(yIdx)(zIdx)) / histBinSize).asInstanceOf[Int] < 0) {
+          print(numBins)
+        }
+        println(floor((dataIn(xIdx)(yIdx)(zIdx)) / histBinSize).asInstanceOf[Int])
+        localHist(insertIDX) += 1
+      }
       localHist
-      
-    }
-    
-    
-    for {
-        x <- 0 until numSupPixelPerX; y <- 0 until numSupPixelPerY; z <- 0 until numSupPixelPerZ //TODO change this to lazy sequence 
-      } outHist(x)(y)(z)= patchHist(x,y,z)
 
-      
-      outHist
+    }
+
+    for {
+      x <- 0 until numSupPixelPerX; y <- 0 until numSupPixelPerY; z <- 0 until numSupPixelPerZ //TODO change this to lazy sequence 
+    } outHist(x)(y)(z) = patchHist(x, y, z)
+
+    outHist
   }
-  
-  
-  
+
   /*
   //TODO Bookmark Next creat the histogram features on these grey scale arrays 
   def genSome3dData(size: Int): (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) = {
@@ -128,6 +275,18 @@ object ThreeDimUtils {
 
   def main(args: Array[String]): Unit = {
 
+    
+    
+    val funRandom = Seq.fill(10*10*10)(Random.nextInt(10)).toArray
+    var thrM = new ThreeDimMat[Int](Vector(10,10,10),initVecDat=funRandom)
+    val meltM = thrM.melt()
+    var thrRec = new ThreeDimMat[Int](Vector(10,10,10),initVecDat=meltM,isNominal = true)
+    assert(thrM.equals(thrRec))
+    
+    var outSum :Double =0;
+    thrRec.classFreq.foreach{ case (key, value ) => outSum+=value}
+    thrRec.classFreq.foreach{ case (key, value ) => println(" k"+key+" -> "+value)}
+     
     val canvisSize = 15;
     val (cooredSum, cooredSumLabel) = genSomeShapesGrey(canvisSize, 0, (x: Int, y: Int, z: Int) => (x + y + z).asInstanceOf[Int])
     val radius = canvisSize / 4
@@ -140,13 +299,11 @@ object ThreeDimUtils {
     val sideLeng = canvisSize / 3;
     val cubeFullTopLeft = genSomeShapesGrey(canvisSize, 0, (x, y, z) => if (x < sideLeng && y < sideLeng && z < sideLeng) 1 else 0)
     val (cubeMid, cubeMidLabel) = genSomeShapesGrey(canvisSize, 1, (x, y, z) => if (Math.abs(centerX - x) < sideLeng / 2 && Math.abs(centerY - y) < sideLeng / 2 && Math.abs(centerZ - z) < sideLeng / 2) 255 else 1)
- val xSet =   Array[Int](0,1,2)
-  
-    
-    
-    val histTest = hist3d(cubeMid, 3, 5) 
-    val histTest2 = hist3d(hollowBall, 3, 5) 
-    val histTest3 = hist3d(ball, 3, 5) 
+    val xSet = Array[Int](0, 1, 2)
+
+    val histTest = hist3d(cubeMid, 3, 5)
+    val histTest2 = hist3d(hollowBall, 3, 5)
+    val histTest3 = hist3d(ball, 3, 5)
     println(cooredSum)
 
   }

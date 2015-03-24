@@ -34,42 +34,35 @@ import ch.ethz.dalab.dissolve.optimization.SolverUtils
 
 object ImageSeg3d {
 
-  
-  
   /*
    * Counts occurances of adjacent pairs of classes 
    * 
    * 
    */
-  def getPairwiseFeatureMap(yMat: Array[Array[Array[Int]]], xMat: Array[Array[Array[Array[Int]]]]): DenseMatrix[Double] = {
-    
-    val dimXx = xMat.length
-    val dimXy = xMat(0).length
-    val dimXz = xMat(0)(0).length
-    val dimYx = yMat.length
-    val dimYy = yMat(0).length
-    val dimYz = yMat(0)(0).length
-    
-    assert(dimXx==dimYx)
-    assert(dimXy==dimYy)
-    assert(dimXz==dimYz)
-    
-    val numFeatures = xMat(0)(0)(0).length
-    val numClasses = yMat(0, 0).numClasses
-    val numRegions = xMat.rows * xMat.cols
+
+  def getPairwiseFeatureMap(yMat: ThreeDimMat[Int], xMat: ThreeDimMat[Array[Double]]): DenseMatrix[Double] = {
+
+    assert(xMat.xDim == yMat.xDim)
+    assert(xMat.yDim == yMat.yDim)
+    assert(xMat.zDim == yMat.zDim)
+
+    val numFeatures = xMat.get(0, 0, 0).length //TODO this hist feature size uniformity is not garateed inside my datastructure 
+    val numClasses = yMat.classSet.size
+    val numRegions = xMat.xDim * xMat.yDim * xMat.zDim
 
     val pairwiseMat = DenseMatrix.zeros[Double](numClasses, numClasses)
 
     for (
-      y <- 0 until xMat.cols;
-      x <- 0 until xMat.rows
+      y <- 0 until xMat.xDim;
+      x <- 0 until xMat.yDim;
+      z <- 0 until xMat.zDim
     ) {
-      val classA = yMat(x, y).label
+      val classA = yMat.get(x, y, z)
 
-      val neighbours = List((1, 0), (0, 1))
+      val neighbours = List((1, 0, 0), (0, 1, 0), (0, 0, 1))
 
-      for ((dx, dy) <- neighbours if (x + dx >= 0) && (y + dy >= 0) && (x + dx < xMat.rows) && (y + dy < xMat.cols)) {
-        val classB = yMat(x + dx, y + dy).label
+      for ((dx, dy, dz) <- neighbours if (x + dx >= 0) && (y + dy >= 0) && (z + dz >= 0) && (x + dx < xMat.xDim) && (y + dy < xMat.yDim) && (z + dz < xMat.zDim)) {
+        val classB = yMat.get(x + dx, y + dy, z + dz)
         pairwiseMat(classA, classB) += 1.0
         pairwiseMat(classB, classA) += 1.0
       }
@@ -77,24 +70,22 @@ object ImageSeg3d {
 
     pairwiseMat
   }
-  
-  
+
   /**
    * Loss function
    */
   def lossFn(yTruth: Array[Array[Array[Int]]], yPredict: Array[Array[Array[Int]]]): Double = {
 
-
-    val xDimTr = yTruth.length; 
+    val xDimTr = yTruth.length;
     val yDimTr = yTruth(0).length;
-    val zDimTr = yTruth(0)(0).length; 
-    val xDimPr = yTruth.length; 
+    val zDimTr = yTruth(0)(0).length;
+    val xDimPr = yTruth.length;
     val yDimPr = yTruth(0).length;
-    val zDimPr = yTruth(0)(0).length; 
-    assert(xDimPr == xDimTr) 
+    val zDimPr = yTruth(0)(0).length;
+    assert(xDimPr == xDimTr)
     assert(yDimPr == yDimTr)
     assert(zDimPr == zDimTr)
-    
+
     val loss =
       for (
         y <- 0 until xDimTr;
@@ -104,11 +95,10 @@ object ImageSeg3d {
         if (yTruth(x)(y)(z) == yPredict(x)(y)(z)) 0.0 else 1.0 // yTruth(x, y).classFrequency  Insert classFrequency back into the truthObject
       }
 
-    loss.sum / (xDimTr * yDimTr *zDimTr)
+    loss.sum / (xDimTr * yDimTr * zDimTr)
   }
-  
-  
-    def main(args: Array[String]): Unit = {
+
+  def main(args: Array[String]): Unit = {
     PropertyConfigurator.configure("conf/log4j.properties")
 
     val options: Map[String, String] = args.map { arg =>
@@ -121,8 +111,6 @@ object ImageSeg3d {
 
     System.setProperty("spark.akka.frameSize", "512")
     println(options)
-
-    
 
   }
 }

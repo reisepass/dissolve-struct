@@ -110,9 +110,9 @@ object ImageSegmentationUtils {
       val blue = (rgb) & 0xFF
 
       // Calculate the index of this pixel in the histogramVector
-      val idx = math.pow(NUM_BINS, 0) * ((red * (NUM_BINS - 1)) / 256.0).round +
-        math.pow(NUM_BINS, 1) * ((green * (NUM_BINS - 1)) / 256.0).round +
-        math.pow(NUM_BINS, 2) * ((blue * (NUM_BINS - 1)) / 256.0).round
+      val idx = Math.pow(NUM_BINS, 0) * ((red * (NUM_BINS - 1)) / 256.0).round +
+        Math.pow(NUM_BINS, 1) * ((green * (NUM_BINS - 1)) / 256.0).round +
+        Math.pow(NUM_BINS, 2) * ((blue * (NUM_BINS - 1)) / 256.0).round
 
       histogramVector(idx.toInt) += 1
     }
