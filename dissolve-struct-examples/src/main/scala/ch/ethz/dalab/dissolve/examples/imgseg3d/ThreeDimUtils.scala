@@ -207,8 +207,9 @@ object ThreeDimUtils {
     in & 0xFF
   }
 
-  //                                                                                       x     y     z      hist
-  def hist3d(dataIn: Array[Array[Array[Int]]], numBins: Int, superPixSize: Int): Array[Array[Array[Array[Int]]]] = {
+  //TODO this function is not yet normalzied 
+  //                                                                                       
+  def hist3d(dataIn: Array[Array[Array[Int]]], numBins: Int, superPixSize: Int): ThreeDimMat[Array[Double]] = {
     val xDim = dataIn.length;
     val yDim = dataIn(0).length;
     val zDim = dataIn(0)(0).length;
@@ -222,15 +223,17 @@ object ThreeDimUtils {
     val numSupPixelPerY = floor(yDim / superPixSize)
     val numSupPixelPerZ = floor(zDim / superPixSize)
 
-    var outHist = Array.fill(numSupPixelPerX, numSupPixelPerY, numSupPixelPerZ, numBins)(0)
-
+    var outHist = new ThreeDimMat[Array[Double]](Vector(numSupPixelPerX,numSupPixelPerY,numSupPixelPerZ ))
+    
+    
+    
     val extraPix = xDim - numSupPixelPerX * superPixSize
     assert(extraPix >= 0)
 
     val histBinSize = 255 / numBins //TODO verify with dataformat, throw exception of not max value 
 
-    def patchHist(x: Int, y: Int, z: Int): Array[Int] = {
-      var localHist = new Array[Int](numBins);
+    def patchHist(x: Int, y: Int, z: Int): Array[Double] = {
+      var localHist : Array[Double] =  Array.fill(numBins)(0.0);
       for {
         xIdx <- x until (x + numSupPixelPerX); yIdx <- y until (y + numSupPixelPerX); zIdx <- 0 until (z + numSupPixelPerX)
       } {
@@ -247,7 +250,7 @@ object ThreeDimUtils {
           print(numBins)
         }
         println(floor((dataIn(xIdx)(yIdx)(zIdx)) / histBinSize).asInstanceOf[Int])
-        localHist(insertIDX) += 1
+        localHist(insertIDX) += 1.0
       }
       localHist
 
@@ -255,11 +258,62 @@ object ThreeDimUtils {
 
     for {
       x <- 0 until numSupPixelPerX; y <- 0 until numSupPixelPerY; z <- 0 until numSupPixelPerZ //TODO change this to lazy sequence 
-    } outHist(x)(y)(z) = patchHist(x, y, z)
+    } outHist.set(x,y,z , patchHist(x, y, z) ) 
 
     outHist
   }
 
+  def superLabels3d (dataIn: Array[Array[Array[Int]]], superPixSize: Int, labelMapping : (Int) => Int) :ThreeDimMat[Int] = {
+    val xDim = dataIn.length
+    val yDim = dataIn(0).length
+    val zDim = dataIn(0)(0).length
+    
+        val numSupPixelPerX = floor(xDim / superPixSize)
+
+    val numSupPixelPerY = floor(yDim / superPixSize)
+    val numSupPixelPerZ = floor(zDim / superPixSize)
+
+    var out = new ThreeDimMat[Int](Vector(numSupPixelPerX,numSupPixelPerY,numSupPixelPerZ ))
+    
+    
+    for {
+      x <- 0 until xDim;  y <- 0 until yDim; z <- 0 until zDim
+    }  out.set(x,y,z,labelMapping(dataIn(x)(y)(z)))
+    
+    out
+  }
+  
+  
+  def generateSomeBalls ( howMany : Int , canvisSize : Int, ballRadius : Double = -1, howMuchNoise : Double = 0.1 ) : Array[(Array[Array[Array[Int]]], Array[Array[Array[Int]]])] = {
+    
+
+    var out : Array[(Array[Array[Array[Int]]], Array[Array[Array[Int]]])] = new  Array[(Array[Array[Array[Int]]], Array[Array[Array[Int]]])](howMany)
+    val radius =  if(ballRadius <0 ) canvisSize / 3 else ballRadius
+  
+    for ( i <- 0 until howMany){
+      
+      val centerX = round(Math.random()*canvisSize)
+      val centerY = round(Math.random()*canvisSize) 
+      val centerZ = round(Math.random()*canvisSize)
+      val (ball, ballLabel) = genSomeShapesGrey(canvisSize, howMuchNoise, (x: Int, y: Int, z: Int) => if (Math.sqrt(((centerX - x) ^ 2 + (centerY - y) ^ 2 + (centerZ - z) ^ 2)) > radius) 1 else 255) 
+      
+      out(i) = (ball, ballLabel)
+    }
+    
+
+    out
+  }
+  
+  
+  def generateSomeData ( howMany : Int , canvisSize : Int, numBins: Int, superPixSize: Int, howMuchNoise : Double = 0.1 ) : (Array[LabeledObject[ThreeDimMat[Array[Double]],ThreeDimMat[Int]]],Array[LabeledObject[ThreeDimMat[Array[Double]],ThreeDimMat[Int]]]) = {
+    val trainingData = generateSomeBalls( howMany,canvisSize,howMuchNoise).map( T => LabeledObject(superLabels3d(T._2,superPixSize, TMP => if(TMP>50)1 else 0) , hist3d (T._1 ,numBins, superPixSize)  )) 
+    val testData     = generateSomeBalls( howMany,canvisSize,howMuchNoise).map( T => LabeledObject(superLabels3d(T._2,superPixSize, TMP => if(TMP>50)1 else 0) , hist3d (T._1 ,numBins, superPixSize)  ))
+    return (trainingData , testData )
+  }
+  
+  
+  
+  
   /*
   //TODO Bookmark Next creat the histogram features on these grey scale arrays 
   def genSome3dData(size: Int): (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) = {
