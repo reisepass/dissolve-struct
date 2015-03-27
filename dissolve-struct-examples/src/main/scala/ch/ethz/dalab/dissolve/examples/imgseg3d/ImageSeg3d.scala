@@ -358,6 +358,7 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
 
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
+    
 
     /**
      * Some local overrides
@@ -379,7 +380,7 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
     val (trainData, testData) = ThreeDimUtils.generateSomeData(15, 25, 3, 5, 0.1)
-
+    solverOptions.numClasses=2 
     
     println(solverOptions.toString())
 
