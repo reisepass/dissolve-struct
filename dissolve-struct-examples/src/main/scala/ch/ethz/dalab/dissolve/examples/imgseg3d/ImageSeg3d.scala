@@ -33,7 +33,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 
 object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDimMat[Int]] with Serializable {
-  val DISABLE_PAIRWISE : Boolean = false
+  val DISABLE_PAIRWISE : Boolean = true
   /*
    * Counts occurances of adjacent pairs of classes 
    * 
@@ -174,8 +174,9 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
 
     val unaryFeatureSize = numDims * numClasses
     val pairwiseFeatureSize = numClasses * numClasses
-    val phi = DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize)//TODO if DISABLE_PAIRWISE == false then should the phi size not be reduced 
-
+    val phi =  if(! DISABLE_PAIRWISE) DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize) else DenseVector.zeros[Double](unaryFeatureSize)
+    
+      
     // Unaries vector, of size f * K. Each column corresponds to a feature vector
     val unary = DenseVector.zeros[Double](numDims * numClasses)
     
@@ -231,7 +232,8 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     //TODO yi is the truth for this particular xi, since in this algo we update a random xi constraint block at a time 
     
     val numFeatures = xi.get(0,0,0).length
-    
+    val numLabels =yi.classSet.size
+    val numLabelsModel = model.numClasses
     assert(model.weights.size == (numFeatures * yi.classSet.size))
      
     var out: ThreeDimMat[Int] = new ThreeDimMat(Vector(yi.xDim,yi.yDim,yi.zDim))

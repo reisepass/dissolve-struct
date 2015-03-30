@@ -26,7 +26,7 @@ import breeze.stats.DescriptiveStats._
 
 //TODO the metaData is hacky, think of something nicer.
 class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, Object] = new HashMap[String, Object](),
-                            initVecDat: Array[DataType] = null, initMatData: Array[Array[Array[DataType]]] = null, isNominal: Boolean = false)(implicit m: ClassManifest[DataType])extends Serializable  {
+                            initVecDat: Array[DataType] = null, initMatData: Array[Array[Array[DataType]]] = null, isNominal: Boolean = false, classes  :Set[Int] = null)(implicit m: ClassManifest[DataType])extends Serializable  {
 
   def meta = metaData
   val dims = if (dimPerCoord.length == 1) new DenseVector[Int](Array(dimPerCoord(0), dimPerCoord(0), dimPerCoord(0))) else dimPerCoord
@@ -63,10 +63,11 @@ class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, 
 
   var classFreq = new HashMap[DataType, Double]
   if (isNominal) {
+    assert(classes !=null)
     classFreq = findAllClasses()
   }
   def frequencies = if (isNominal) classFreq else null
-  def classSet = if (isNominal) classFreq.keySet else null
+  def classSet = if (isNominal) classes else null
 
   def reshape(inData: Array[DataType]) {
     reshape(new DenseVector(inData))
@@ -251,17 +252,23 @@ object ThreeDimUtils {
     outHist
   }
 
-  def superLabels3d(dataIn: Array[Array[Array[Int]]], superPixSize: Int, labelMapping: (Array[Int]) => Int): ThreeDimMat[Int] = {
+  def superLabels3d(dataIn: Array[Array[Array[Int]]], superPixSize: Int, labelMapping: (Array[Int]) => Int, numYclasses : Int = 2): ThreeDimMat[Int] = {
     val xDim = dataIn.length
     val yDim = dataIn(0).length
     val zDim = dataIn(0)(0).length
 
+    
+    //TODO Bookmark
+    //I need to include the class labels into the y Training data. I think i can do this by searching the output space of labelMapping since input is just 0-255 
+    
     val numSupPixelPerX = floor(xDim / superPixSize)
 
     val numSupPixelPerY = floor(yDim / superPixSize)
     val numSupPixelPerZ = floor(zDim / superPixSize)
 
-    var out = new ThreeDimMat[Int](Vector(numSupPixelPerX, numSupPixelPerY, numSupPixelPerZ),isNominal=true)
+    
+    
+    var out = new ThreeDimMat[Int](Vector(numSupPixelPerX, numSupPixelPerY, numSupPixelPerZ),isNominal=true, classes= (1 to numYclasses toList).toSet)
 
     def patchy(x: Int, y: Int, z: Int): Array[Int] = {
       var out = new Array[Int](superPixSize * superPixSize * superPixSize);
