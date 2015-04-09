@@ -23,10 +23,11 @@ import scala.collection.mutable.HashMap
 import scala.util.Random
 import scala.collection.mutable.HashSet
 import breeze.stats.DescriptiveStats._
+import scala.collection.mutable.ListBuffer
 
 //TODO the metaData is hacky, think of something nicer.
 class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, Object] = new HashMap[String, Object](),
-                            initVecDat: Array[DataType] = null, initMatData: Array[Array[Array[DataType]]] = null, isNominal: Boolean = false, classes  :Set[Int] = null)(implicit m: ClassManifest[DataType])extends Serializable  {
+                            initVecDat: Array[DataType] = null, initMatData: Array[Array[Array[DataType]]] = null, isNominal: Boolean = false, classes: Set[DataType] = null)(implicit m: ClassManifest[DataType]) extends Serializable {
 
   def meta = metaData
   val dims = if (dimPerCoord.length == 1) new DenseVector[Int](Array(dimPerCoord(0), dimPerCoord(0), dimPerCoord(0))) else dimPerCoord
@@ -63,11 +64,13 @@ class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, 
 
   var classFreq = new HashMap[DataType, Double]
   if (isNominal) {
-    assert(classes !=null)
+    assert(classes != null)
     classFreq = findAllClasses()
   }
   def frequencies = if (isNominal) classFreq else null
   def classSet = if (isNominal) classes else null
+  def nominal = this.isNominal
+  if (isNominal) assert(classSet.equals((0 until classSet.size toList).toSet))
 
   def reshape(inData: Array[DataType]) {
     reshape(new DenseVector(inData))
@@ -142,6 +145,7 @@ class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, 
     assert(isNominal)
     // var classSet = new HashSet[DataType];  
     var classCount = new HashMap[DataType, Int]
+    classes.map(C => classCount.put(C, 0))
     var totalCount = 0;
     for (x <- 0 until dims(0)) {
       for (y <- 0 until dims(1)) {
@@ -155,6 +159,147 @@ class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, 
     var classFreq = new HashMap[DataType, Double]
     classCount.foreach { case (key, value) => classFreq.put(key, (value.asInstanceOf[Double] / totalCount)) }
     classFreq
+
+  }
+
+}
+
+class NominalThreeDimMat[DataType](dimPerCoord: Vector[Int], initVecDat: Array[DataType] = null,
+                                   initMatData: Array[Array[Array[DataType]]] = null, 
+                                   classes: Set[DataType])
+                                   (implicit m: ClassManifest[DataType])
+                                    extends Serializable {
+
+  val dims = if (dimPerCoord.length == 1) new DenseVector[Int](Array(dimPerCoord(0), dimPerCoord(0), dimPerCoord(0))) else dimPerCoord
+  def xDim = dims(0)
+  def yDim = dims(1)
+  def zDim = dims(2)
+  var myData: Array[Array[Array[DataType]]] = new Array[Array[Array[DataType]]](dims(0))
+  assert(dims.size == 3)
+  for (x <- 0 until dims(0)) {
+    myData(x) = new Array[Array[DataType]](dims(1))
+    for (y <- 0 until dims(1)) {
+      myData(x)(y) = new Array[DataType](dims(2))
+    }
+  }
+  if (initVecDat != null) {
+    assert(initMatData == null)
+    assert(initVecDat.length == dims(0) * dims(1) * dims(2))
+    reshape(initVecDat)
+  }
+  if (initMatData != null) {
+    assert(initVecDat == null)
+    assert(initMatData.length == dims(0))
+    assert(initMatData(0).length == dims(1))
+    assert(initMatData(0)(0).length == dims(2))
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          myData(x)(y)(z) = initMatData(x)(y)(z);
+        }
+      }
+    }
+
+  }
+
+  var classFreq = new HashMap[DataType, Double]
+
+  assert(classes != null)
+  classFreq = findAllClasses()
+
+  def frequencies = classFreq
+  def classSet = classes
+  def nominal = true
+  assert(classSet.equals((0 until classSet.size toList).toSet))
+
+  def reshape(inData: Array[DataType]) {
+    reshape(new DenseVector(inData))
+  }
+  def reshape(inData: Vector[DataType]) {
+    var vCounter = 0;
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          myData(x)(y)(z) = inData(vCounter)
+          vCounter += 1
+        }
+      }
+    }
+  }
+  def melt(): Array[DataType] = {
+
+    var outVector = new Array[DataType](dims(0) * dims(1) * dims(2))
+    var vCounter = 0
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          outVector(vCounter) = myData(x)(y)(z)
+          vCounter += 1
+        }
+      }
+    }
+    outVector
+  }
+
+  def get(x: Int, y: Int, z: Int): DataType = {
+    myData(x)(y)(z)
+  }
+  def set(x: Int, y: Int, z: Int, newVal: DataType) {
+    myData(x)(y)(z) = newVal
+  }
+
+  def equals(other: ThreeDimMat[DataType]): Boolean = {
+
+    if (this.xDim != other.xDim)
+      return false
+    if (this.yDim != other.yDim)
+      return false
+    if (this.zDim != other.zDim)
+      return false
+
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          if (this.get(x, y, z) != other.get(x, y, z))
+            return false
+        }
+      }
+    }
+
+    return true
+  }
+
+  def dimAgree[G >: DataType](other: ThreeDimMat[G]): Boolean = {
+    if (other.xDim != this.xDim)
+      return false
+    if (other.yDim != this.yDim)
+      return false
+    if (other.zDim != this.zDim)
+      return false
+    true
+  }
+
+  //Warning, if this method is evoced on non Nominal data it will douplicate the entire dataset 
+
+  def findAllClasses(): HashMap[DataType, Double] = {
+
+    // var classSet = new HashSet[DataType];  
+    var classCount = new HashMap[DataType, Int]
+    classes.map(C => classCount.put(C, 0))
+    var totalCount = 0;
+    for (x <- 0 until dims(0)) {
+      for (y <- 0 until dims(1)) {
+        for (z <- 0 until dims(2)) {
+          classCount.update(this.get(x, y, z), classCount.getOrElse(this.get(x, y, z), 0) + 1)
+          totalCount += 1
+        }
+      }
+    }
+
+    var classFreq = new HashMap[DataType, Double]
+    classCount.foreach { case (key, value) => classFreq.put(key, (value.asInstanceOf[Double] / totalCount)) }
+    classFreq
+
   }
 
 }
@@ -252,34 +397,33 @@ object ThreeDimUtils {
     outHist
   }
 
-  def superLabels3d(dataIn: Array[Array[Array[Int]]], superPixSize: Int, labelMapping: (Array[Int]) => Int, numYclasses : Int = 2): ThreeDimMat[Int] = {
+  def superLabels3d(dataIn: Array[Array[Array[Int]]], superPixSize: Int, labelMapping: (Array[Int]) => Int, numYclasses: Int = 2): NominalThreeDimMat[Int] = {
     val xDim = dataIn.length
     val yDim = dataIn(0).length
     val zDim = dataIn(0)(0).length
 
-    
     //TODO Bookmark
     //I need to include the class labels into the y Training data. I think i can do this by searching the output space of labelMapping since input is just 0-255 
-    
+
     val numSupPixelPerX = floor(xDim / superPixSize)
 
     val numSupPixelPerY = floor(yDim / superPixSize)
     val numSupPixelPerZ = floor(zDim / superPixSize)
 
-    
-    
-    var out = new ThreeDimMat[Int](Vector(numSupPixelPerX, numSupPixelPerY, numSupPixelPerZ),isNominal=true, classes= (1 to numYclasses toList).toSet)
+    var out = new NominalThreeDimMat[Int](Vector(numSupPixelPerX, numSupPixelPerY, numSupPixelPerZ), classes = (0 until numYclasses toList).toSet)
 
     def patchy(x: Int, y: Int, z: Int): Array[Int] = {
-      var out = new Array[Int](superPixSize * superPixSize * superPixSize);
+      var out = new ListBuffer[Int]()
       for {
-        xIdx <- x until (x + superPixSize); yIdx <- y until (y + superPixSize); zIdx <- 0 until (z + superPixSize)
+        xIdx <- superPixSize*x until (superPixSize*x + superPixSize); 
+        yIdx <- superPixSize*y until (superPixSize*y + superPixSize); 
+        zIdx <- superPixSize*z until (superPixSize*z + superPixSize)
       } {
-        out(xIdx + yIdx + zIdx) = dataIn(xIdx)(yIdx)(zIdx)
-
+        out.append(dataIn(xIdx)(yIdx)(zIdx))
       }
-      out
-
+      if(out.length<2)
+        print("wtf")
+      out.toArray
     }
 
     for {
@@ -316,9 +460,15 @@ object ThreeDimUtils {
     return cumsum / dataIn.length
   }
 
-  def generateSomeData(howMany: Int, canvisSize: Int, numBins: Int, superPixSize: Int, howMuchNoise: Double = 0.1): (Array[LabeledObject[ThreeDimMat[Array[Double]], ThreeDimMat[Int]]], Array[LabeledObject[ThreeDimMat[Array[Double]], ThreeDimMat[Int]]]) = {
-    val trainingData = generateSomeBalls(howMany, canvisSize, howMuchNoise).map(T => LabeledObject(superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 50) 1 else 0), hist3d(T._1, numBins, superPixSize)))
-    val testData = generateSomeBalls(howMany, canvisSize, howMuchNoise).map(T => LabeledObject(superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 50) 1 else 0), hist3d(T._1, numBins, superPixSize)))
+  def generateSomeData(howMany: Int, canvisSize: Int, numBins: Int, superPixSize: Int, howMuchNoise: Double = 0.1): (Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]], Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]]) = {
+    val trainDataRaw = generateSomeBalls(howMany, canvisSize, howMuchNoise);
+    val testDataRaw =  generateSomeBalls(howMany, canvisSize, howMuchNoise);
+    val trainingData = trainDataRaw.map(T => LabeledObject(
+                superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 0.5) 1 else 0), 
+                hist3d(T._1, numBins, superPixSize)))
+    val testData = testDataRaw.map(T => LabeledObject(
+                superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 0.5) 1 else 0), 
+                hist3d(T._1, numBins, superPixSize)))
     return (trainingData, testData)
   }
 

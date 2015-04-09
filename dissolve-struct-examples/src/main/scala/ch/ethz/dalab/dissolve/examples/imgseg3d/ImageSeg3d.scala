@@ -32,8 +32,8 @@ import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 
-object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDimMat[Int]] with Serializable {
-  val DISABLE_PAIRWISE : Boolean = true
+object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]] with Serializable {
+  val DISABLE_PAIRWISE: Boolean = true
   /*
    * Counts occurances of adjacent pairs of classes 
    * 
@@ -50,17 +50,17 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
    * - a matrix of size (f*K) x r, i.e, each column corresponds to the feature map of x_i
    */
 
-  // We assume classes are given by sequencial Int values 
-  def getUnaryFeatureMap(yMat: ThreeDimMat[Int], xMat: ThreeDimMat[Array[Double]]): DenseMatrix[Double] = {
+  // We assume classes are given by sequencial Int values  STARTING AT 0 
+  def getUnaryFeatureMap(yMat: NominalThreeDimMat[Int], xMat: ThreeDimMat[Array[Double]]): DenseMatrix[Double] = {
     assert(xMat.xDim == yMat.xDim)
     assert(xMat.yDim == yMat.yDim)
     assert(xMat.zDim == yMat.zDim)
 
     val numFeatures = xMat.get(0, 0, 0).length //TODO this hist feature size uniformity is not garateed inside my datastructure 
     val numClasses = yMat.classSet.size
-    
-    assert (yMat.classSet.toSeq.sum == (0 until numClasses).reduceLeft[Int](_+_) ) //Testing sequencial assumoption rufly 
-    
+
+    assert(yMat.classSet.toSeq.sum == (0 until numClasses).reduceLeft[Int](_ + _)) //Testing sequencial assumoption rufly 
+
     val numRegions = xMat.xDim * xMat.yDim * xMat.zDim
 
     val unaryMat = DenseMatrix.zeros[Double](numFeatures * numClasses, numRegions)
@@ -89,9 +89,8 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
 
     unaryMat
   }
-  
-  
-   /**
+
+  /**
    * Given:
    * - a matrix xMat of super-pixels, of size r = n x m, and x_i, an f-dimensional vector
    * - corresponding labels of these super-pixels yMat, with K classes
@@ -111,8 +110,7 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
      * construct a feature map phi_i given by: [I(y_i = 0)x_i I(y_i = 1)x_i ... I(y_i = K)x_i ]
      */
 
-    
-      for (x <- 0 until xMat.xDim) {
+    for (x <- 0 until xMat.xDim) {
       for (y <- 0 until xMat.yDim) {
         for (z <- 0 until xMat.zDim) {
           val i = columnMajorIdx3d(x, y, z, xMat.xDim, xMat.yDim)
@@ -124,9 +122,8 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     }
     unaryMat
   }
-  
 
-  def getPairwiseFeatureMap(yMat: ThreeDimMat[Int], xMat: ThreeDimMat[Array[Double]]): DenseMatrix[Double] = {
+  def getPairwiseFeatureMap(yMat: NominalThreeDimMat[Int], xMat: ThreeDimMat[Array[Double]]): DenseMatrix[Double] = {
 
     assert(xMat.xDim == yMat.xDim)
     assert(xMat.yDim == yMat.yDim)
@@ -157,39 +154,39 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     pairwiseMat
   }
 
-  
-    /**
+  /**
    * Feature Function.
    * Uses: http://arxiv.org/pdf/1408.6804v2.pdf
    * http://www.kev-smith.com/papers/LUCCHI_ECCV12.pdf
    */
-  def featureFn(xMat: ThreeDimMat[Array[Double]], yMat: ThreeDimMat[Int]): Vector[Double] = {
+  def featureFn(xMat: ThreeDimMat[Array[Double]], yMat: NominalThreeDimMat[Int]): Vector[Double] = {
 
-   assert(xMat.xDim == yMat.xDim)
+    assert(xMat.xDim == yMat.xDim)
     assert(xMat.yDim == yMat.yDim)
     assert(xMat.zDim == yMat.zDim)
+    if (!yMat.nominal)
+      assert(yMat.nominal)
 
     val numDims = xMat.get(0, 0, 0).length //TODO this hist feature size uniformity is not garateed inside my datastructure 
     val numClasses = yMat.classSet.size
 
     val unaryFeatureSize = numDims * numClasses
     val pairwiseFeatureSize = numClasses * numClasses
-    val phi =  if(! DISABLE_PAIRWISE) DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize) else DenseVector.zeros[Double](unaryFeatureSize)
-    
-      
+    val phi = if (!DISABLE_PAIRWISE) DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize) else DenseVector.zeros[Double](unaryFeatureSize)
+
     // Unaries vector, of size f * K. Each column corresponds to a feature vector
     val unary = DenseVector.zeros[Double](numDims * numClasses)
-    
-     for (
+
+    for (
       y <- 0 until xMat.xDim;
       x <- 0 until xMat.yDim;
       z <- 0 until xMat.zDim
-    ) {  //TODO cant you jsut call  getUnaryFeatureMap()  for this ? 
-        val label = yMat.get(x, y, z)
-        val startIdx = label * numDims
-        val endIdx = startIdx + numDims
-        unary(startIdx until endIdx) := Vector(xMat.get(x,y,z)) + unary(startIdx until endIdx)
-     }
+    ) { //TODO cant you jsut call  getUnaryFeatureMap()  for this ? 
+      val label = yMat.get(x, y, z)
+      val startIdx = label * numDims
+      val endIdx = startIdx + numDims
+      unary(startIdx until endIdx) := Vector(xMat.get(x, y, z)) + unary(startIdx until endIdx)
+    }
     // Set Unary Features
     phi(0 until (numDims * numClasses)) := unary
 
@@ -200,14 +197,11 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
 
     phi
   }
-  
-  
-  
+
   /**
    * Loss function
    */
-  def lossFn(yTruth: ThreeDimMat[Int], yPredict: ThreeDimMat[Int]): Double = { //TODO convert to new 3dmat class
-
+  def lossFn(yTruth: NominalThreeDimMat[Int], yPredict: NominalThreeDimMat[Int]): Double = { //TODO convert to new 3dmat class
 
     assert(yPredict.xDim == yTruth.xDim)
     assert(yPredict.yDim == yTruth.yDim)
@@ -220,96 +214,102 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
         y <- 0 until yTruth.yDim;
         z <- 0 until yTruth.zDim
       ) yield {
-        if (yTruth.get(x,y,z) == yPredict.get(x,y,z)) 0.0 else 1.0 / classFreqs.get(yTruth.get(x, y,z)).get  // Insert classFrequency back into the truthObject
+        //if (yTruth.get(x, y, z) == yPredict.get(x, y, z)) 0.0 else 1.0 / classFreqs.get(yTruth.get(x, y, z)).get // Insert classFrequency back into the truthObject
+        if (yTruth.get(x, y, z) == yPredict.get(x, y, z)) 0.0 else 1.0 // Insert classFrequency back into the truthObject
       }
 
     loss.sum / (yTruth.xDim * yTruth.yDim * yTruth.zDim)
   }
-  
-  
-  def oracleFn(model: StructSVMModel[ThreeDimMat[Array[Double]], ThreeDimMat[Int]], xi: ThreeDimMat[Array[Double]], yi: ThreeDimMat[Int]): ThreeDimMat[Int] = {
-       
+
+  def oracleFn(model: StructSVMModel[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]], xi: ThreeDimMat[Array[Double]], yi: NominalThreeDimMat[Int]): NominalThreeDimMat[Int] = {
+
     //TODO yi is the truth for this particular xi, since in this algo we update a random xi constraint block at a time 
-    
-    val numFeatures = xi.get(0,0,0).length
-    val numLabels =yi.classSet.size
+
+    val numFeatures = xi.get(0, 0, 0).length
+    val numLabels = yi.classSet.size
     val numLabelsModel = model.numClasses
     assert(model.weights.size == (numFeatures * yi.classSet.size))
-     
-    var out: ThreeDimMat[Int] = new ThreeDimMat(Vector(yi.xDim,yi.yDim,yi.zDim))
-       
-    
-      for (x <- 0 until yi.xDim) {
+
+    var out: NominalThreeDimMat[Int] = new NominalThreeDimMat(Vector(yi.xDim, yi.yDim, yi.zDim), classes = yi.classSet) //TODO here i put an error 
+
+    for (x <- 0 until yi.xDim) {
       for (y <- 0 until yi.yDim) {
         for (z <- 0 until yi.zDim) {
-           var maxCost = Double.MinValue
-           var maxCostY = 0 //again assuming y_classes are consecutive integers
-           for ( possibleY <- yi.classSet.toSeq) {
-              val x_i = xi.get(x, y, z)
-              
-              val phi_i = DenseVector.zeros[Double](numFeatures * yi.classSet.size)
-              val startIdx = numFeatures * possibleY //assumption of y_i being an int comes in here. Else this would have to have some static ordering 
-              val endIdx = startIdx + numFeatures
-              phi_i(startIdx until endIdx) := Vector(x_i)
-              
-              val partialEnergy = model.weights dot phi_i
-            val partialLoss = (if (yi.get(x, y, z) == possibleY) 0.0 else 1.0 / yi.classFreq.get(yi.get(x, y, z)).get) / (yi.xDim * yi.yDim * yi.zDim) 
-              if( maxCost <(  partialLoss - partialEnergy ))  maxCost =   partialLoss - partialEnergy ;  maxCostY = possibleY
-   
-           }
-       out.set(x, y, z,maxCostY) 
+          var maxCost = Double.MinValue
+          var maxCostY = 0 //again assuming y_classes are consecutive integers
+          for (possibleY <- yi.classSet.toSeq) {
+            val x_i = xi.get(x, y, z)
+
+            val phi_i = DenseVector.zeros[Double](numFeatures * yi.classSet.size)
+            val startIdx = numFeatures * possibleY //assumption of y_i being an int comes in here. Else this would have to have some static ordering 
+            val endIdx = startIdx + numFeatures
+
+            phi_i(startIdx until endIdx) := Vector(x_i)
+
+            val partialEnergy = model.weights dot phi_i
+
+            val someYi = yi.get(x, y, z)
+            val partialLoss = (if (someYi == possibleY)
+              0.0
+            else
+              1.0 /
+                yi.classFreq
+                .get(someYi)
+                .get) /
+              (yi.xDim * yi.yDim * yi.zDim)
+
+            if (maxCost < (partialLoss - partialEnergy)) maxCost = partialLoss - partialEnergy; maxCostY = possibleY
+
+          }
+          out.set(x, y, z, maxCostY)
 
         }
       }
     }
-    
-    
-   
-   return  out
+
+    return out
   }
-  
+
   //TODO ask someone if this is correct. 
-    def predictFn(model: StructSVMModel[ThreeDimMat[Array[Double]], ThreeDimMat[Int]], xi: ThreeDimMat[Array[Double]]): ThreeDimMat[Int] = {
-      val numFeatures = xi.get(0,0,0).length
-    
-    assert(model.weights.size == (numFeatures * xi.classSet.size))
-     
-    var out: ThreeDimMat[Int] = new ThreeDimMat(Vector(xi.xDim,xi.yDim,xi.zDim))
-       
-    
-      for (x <- 0 until xi.xDim) {
+  def predictFn(model: StructSVMModel[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]], xi: ThreeDimMat[Array[Double]]): NominalThreeDimMat[Int] = {
+    val numFeatures = xi.get(0, 0, 0).length
+
+    assert(model.weights.size == (numFeatures * model.numClasses))
+
+    //TODO 
+    //Bookmark
+    //how the fuck do i know the y classeSet here ????  
+    var out: NominalThreeDimMat[Int] = new NominalThreeDimMat(Vector(xi.xDim, xi.yDim, xi.zDim), classes = ((0 to model.numClasses).toList toSet))
+
+    for (x <- 0 until xi.xDim) {
       for (y <- 0 until xi.yDim) {
         for (z <- 0 until xi.zDim) {
-           var leastCost = Double.MaxValue
-           var leastCostY = 0 //again assuming y_classes are consecutive integers
-           for ( possibleY <- 0 until model.numClasses) {
-              val x_i = xi.get(x, y, z)
-              
-              val phi_i = DenseVector.zeros[Double](numFeatures * model.numClasses)
-              val startIdx = numFeatures * possibleY //assumption of y_i being an int comes in here. Else this would have to have some static ordering 
-              val endIdx = startIdx + numFeatures
-              phi_i(startIdx until endIdx) := Vector(x_i)
-              
-              val partialEnergy = model.weights dot phi_i
-         
-              if( leastCost >( partialEnergy  ))  leastCost =  partialEnergy;  leastCostY = possibleY
-   
-           }
-       out.set(x, y, z,leastCostY) 
+          var leastCost = Double.MaxValue
+          var leastCostY = 0 //again assuming y_classes are consecutive integers
+          for (possibleY <- 0 until model.numClasses) {
+            val x_i = xi.get(x, y, z)
+
+            val phi_i = DenseVector.zeros[Double](numFeatures * model.numClasses)
+            val startIdx = numFeatures * possibleY //assumption of y_i being an int comes in here. Else this would have to have some static ordering 
+            val endIdx = startIdx + numFeatures
+            phi_i(startIdx until endIdx) := Vector(x_i)
+
+            val partialEnergy = model.weights dot phi_i
+
+            if (leastCost > (partialEnergy)) leastCost = partialEnergy; leastCostY = possibleY
+
+          }
+          out.set(x, y, z, leastCostY)
 
         }
       }
     }
-    
-    
-   
-   return  out
-    }
-    
-    def main(args: Array[String]): Unit = {
-      
-      
-      
+
+    return out
+  }
+
+  def main(args: Array[String]): Unit = {
+
     PropertyConfigurator.configure("conf/log4j.properties")
 
     val options: Map[String, String] = args.map { arg =>
@@ -323,25 +323,19 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     System.setProperty("spark.akka.frameSize", "512")
     println(options)
     runStuff(options)
-    }
-    def runStuff (options : Map[String, String]){
-    
-    
+  }
+  def runStuff(options: Map[String, String]) {
+
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
     val runLocally: Boolean = options.getOrElse("local", "true").toBoolean
-        val PERC_TRAIN: Double = 0.05 // Restrict to using a fraction of data for training (Used to overcome OutOfMemory exceptions while testing locally)
+    val PERC_TRAIN: Double = 0.05 // Restrict to using a fraction of data for training (Used to overcome OutOfMemory exceptions while testing locally)
 
     val msrcDir: String = "../data/generated"
 
     val appName: String = options.getOrElse("appname", "ImageSeg")
 
-    
-    
-    
-    
-    
-     val solverOptions: SolverOptions[ThreeDimMat[Array[Double]], ThreeDimMat[Int]] = new SolverOptions()
+    val solverOptions: SolverOptions[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]] = new SolverOptions()
     solverOptions.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
     solverOptions.lambda = options.getOrElse("lambda", "0.01").toDouble
@@ -360,7 +354,6 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
 
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
-    
 
     /**
      * Some local overrides
@@ -379,14 +372,13 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
       solverOptions.debugMultiplier = 1
     }
 
-    
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
-    val (trainData, testData) = ThreeDimUtils.generateSomeData(15, 25, 3, 5, 0.1)
-    solverOptions.numClasses=2 
-    
+    val (trainData, testData) = ThreeDimUtils.generateSomeData(30, 25, 3, 5, 0)
+    solverOptions.numClasses = 2
+
     println(solverOptions.toString())
 
- val conf =
+    val conf =
       if (runLocally)
         new SparkConf().setAppName(appName).setMaster("local")
       else
@@ -409,14 +401,37 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], ThreeDim
       else
         sc.parallelize(trainData)
 
-    val trainer: StructSVMWithDBCFW[ThreeDimMat[Array[Double]], ThreeDimMat[Int]] =
-      new StructSVMWithDBCFW[ThreeDimMat[Array[Double]], ThreeDimMat[Int]](
+    val trainer: StructSVMWithDBCFW[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]] =
+      new StructSVMWithDBCFW[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]](
         trainDataRDD,
         this, //TODO Bookmark
         solverOptions)
 
-    val model: StructSVMModel[ThreeDimMat[Array[Double]], ThreeDimMat[Int]] = trainer.trainModel()
+    val model: StructSVMModel[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]] = trainer.trainModel()
 
+    
+    
+    
+    var avgTrainLoss = 0.0
+    for (item <- testData) {
+      val prediction = model.predict(item.pattern)
+      avgTrainLoss += lossFn(item.label, prediction)
+    }
+    avgTrainLoss = avgTrainLoss / testData.size
+
+    println("Test Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
+    
+    
+    //Training Error 
+     avgTrainLoss = 0.0
+     for (item <- trainData) {
+      val prediction = model.predict(item.pattern)
+      avgTrainLoss += lossFn(item.label, prediction)
+    }
+    avgTrainLoss = avgTrainLoss / trainData.size
+    println("TRAINING: Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
+
+    
   }
 
 }
