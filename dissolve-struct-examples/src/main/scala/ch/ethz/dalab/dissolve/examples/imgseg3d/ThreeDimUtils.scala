@@ -460,7 +460,7 @@ object ThreeDimUtils {
     return cumsum / dataIn.length
   }
 
-  def generateSomeData(howMany: Int, canvisSize: Int, numBins: Int, superPixSize: Int, howMuchNoise: Double = 0.1): (Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]], Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]]) = {
+  def generateSomeData(howMany: Int, canvisSize: Int, numBins: Int, superPixSize: Int, howMuchNoise: Double = 0.01): (Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]], Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]]) = {
     val trainDataRaw = generateSomeBalls(howMany, canvisSize, howMuchNoise);
     val testDataRaw =  generateSomeBalls(howMany, canvisSize, howMuchNoise);
     val trainingData = trainDataRaw.map(T => LabeledObject(

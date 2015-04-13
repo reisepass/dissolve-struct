@@ -273,7 +273,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
       val row = new ArrayBuffer[Pixel]
 
       for (j <- 0 until imageWidth) {
-        row += new Pixel(0)
+        row += new Pixel(0) //0 is the initial value 
       }
 
       image += row
@@ -283,24 +283,24 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
 
     object PixelDomain extends DiscreteDomain(numClasses)
 
-    class Pixel(i: Int) extends DiscreteVariable(i) {
+    class Pixel(i: Int) extends DiscreteVariable(i) { //i is just the initial value 
       def domain = PixelDomain
     }
 
     def getUnaryFactor(yi: Pixel, x: Int, y: Int): Factor = {
-      new Factor1(yi) {
-        val r = columnMajorIdx(x, y, image.size)
-        def score(k: Pixel#Value) = thetaUnary(r, k.intValue)
-      }
+      new Factor1(yi) {//TODO ask OT,  it appears that yi is not being used for anything. 
+        val r = columnMajorIdx(x, y, image.size)  //image.size == imageHeight 
+        def score(k: Pixel#Value) = thetaUnary(r, k.intValue)  
+      }    
     }
 
-    def getPairwiseFactor(yi: Pixel, yj: Pixel): Factor = {
+    def getPairwiseFactor(yi: Pixel, yj: Pixel): Factor = { //Adapter method for the Factorie types Pixel to get the theta of their member values 
       new Factor2(yi, yj) {
         def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)
       }
     }
 
-    val indexedPixels =
+    val indexedPixels = //I think this was just created in order to avoid for loops on the lines below 
       for {
         x <- 0 until image.size;
         y <- 0 until image(0).size
@@ -314,21 +314,21 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
           (r, pix)
       }
 
-    val pixels: IndexedSeq[Pixel] = indexedPixels.map(_._2)
+    val pixels: IndexedSeq[Pixel] = indexedPixels.map(_._2)  //TODO understand this _._2 notation. I'm guessing this is just removing the (x,y) and just saving the other part in an array 
 
     val unaries: IndexedSeq[Factor] = indexedPixels.map {
       case ((x, y), pix) =>
         getUnaryFactor(pix, x, y)
     }
 
-    val pairwise: IndexedSeq[Factor] =
+    val pairwise: IndexedSeq[Factor] = //TODO check in memory is pairwise double the length of unaries 
       indexedPixels.flatMap {
         case ((x, y), pix) =>
           val factors = new ArrayBuffer[Factor]
 
           // (x, y) and (x, y+1)
           if (y < imageWidth - 1)
-            factors ++= getPairwiseFactor(pix, image(x)(y + 1))
+            factors ++= getPairwiseFactor(pix, image(x)(y + 1)) //TODO Ask OT :  it looks like += would work here why use ++= 
 
           // (x, y) and (x+1, y)
           if (x < imageHeight - 1)
@@ -337,13 +337,13 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
           factors
       }
 
-    val model = new ItemizedModel
+    val model = new ItemizedModel //TODO read a factori example on how to use ItemizedModel 
     model ++= unaries
     if (!DISABLE_PAIRWISE) model ++= pairwise
 
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
-    val assgn = maximizer.infer(pixels, model).mapAssignment
+    val assgn = maximizer.infer(pixels, model).mapAssignment //Where the magic happens 
 
     // Retrieve assigned labels from these pixels
     val imgMask: DenseMatrix[ROILabel] = new DenseMatrix[ROILabel](imageHeight, imageWidth)
@@ -474,20 +474,23 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
     assert(DISABLE_PAIRWISE || pairwiseWeights.rows == numClasses)
 
     val phi_Y: DenseMatrix[Double] = getUnaryFeatureMap(xi) // Retrieves a f x r matrix representation of the original image, i.e, each column is the feature vector that region r
-    val thetaUnary = phi_Y.t * unaryWeights // Returns a r x K matrix, where theta(r, k) is the unary potential of region i having label k
+    val thetaUnary = phi_Y.t * unaryWeights // Returns a r x K matrix, where theta(r, k) is the unary potential of region r having label k
 
     val thetaPairwise = pairwiseWeights
 
     // If yi is present, do loss-augmentation
     if (yi != null) {
-      yi.keysIterator.foreach {
+      yi.keysIterator.foreach { //TODO ask OT:  should the unary factors not be negative in this formulation ?   
         case (r, c) =>
           val idx = columnMajorIdx(r, c, yi.rows)
           val yLab = yi(r, c)
-          thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / numROI
+          thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / numROI  //We are using a zero-one loss per y so here there are just constants
           // Loss augmentation step
           val k = yLab.label
-          thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / numROI
+          thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / numROI  //This is a zero loss b/c it cancels out the +1 for all non correct labels 
+                                                                  //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
+                                                                  //     a whole image but inside it uses zero-one loss for pixel comparison 
+                                                                  //     this should be a function so it is common between the two uses 
       }
 
     }
