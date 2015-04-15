@@ -165,10 +165,9 @@ class ThreeDimMat[DataType](dimPerCoord: Vector[Int], metaData: HashMap[String, 
 }
 
 class NominalThreeDimMat[DataType](dimPerCoord: Vector[Int], initVecDat: Array[DataType] = null,
-                                   initMatData: Array[Array[Array[DataType]]] = null, 
-                                   classes: Set[DataType])
-                                   (implicit m: ClassManifest[DataType])
-                                    extends Serializable {
+                                   initMatData: Array[Array[Array[DataType]]] = null,
+                                   classes: Set[DataType])(implicit m: ClassManifest[DataType])
+  extends Serializable {
 
   val dims = if (dimPerCoord.length == 1) new DenseVector[Int](Array(dimPerCoord(0), dimPerCoord(0), dimPerCoord(0))) else dimPerCoord
   def xDim = dims(0)
@@ -266,6 +265,19 @@ class NominalThreeDimMat[DataType](dimPerCoord: Vector[Int], initVecDat: Array[D
       }
     }
 
+    return true
+  }
+
+  def isInverseOf(other: NominalThreeDimMat[Int]): Boolean = {
+    assert(other.xDim == this.xDim && other.yDim == this.xDim && other.zDim == this.zDim)
+    for (x <- 0 until other.xDim) {
+      for (y <- 0 until other.yDim) {
+        for (z <- 0 until other.zDim) {
+          if (this.get(x, y, z) == other.get(x, y, z))
+            return false
+        }
+      }
+    }
     return true
   }
 
@@ -415,13 +427,13 @@ object ThreeDimUtils {
     def patchy(x: Int, y: Int, z: Int): Array[Int] = {
       var out = new ListBuffer[Int]()
       for {
-        xIdx <- superPixSize*x until (superPixSize*x + superPixSize); 
-        yIdx <- superPixSize*y until (superPixSize*y + superPixSize); 
-        zIdx <- superPixSize*z until (superPixSize*z + superPixSize)
+        xIdx <- superPixSize * x until (superPixSize * x + superPixSize);
+        yIdx <- superPixSize * y until (superPixSize * y + superPixSize);
+        zIdx <- superPixSize * z until (superPixSize * z + superPixSize)
       } {
         out.append(dataIn(xIdx)(yIdx)(zIdx))
       }
-      if(out.length<2)
+      if (out.length < 2)
         print("wtf")
       out.toArray
     }
@@ -462,13 +474,13 @@ object ThreeDimUtils {
 
   def generateSomeData(howMany: Int, canvisSize: Int, numBins: Int, superPixSize: Int, howMuchNoise: Double = 0.01): (Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]], Array[LabeledObject[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]]]) = {
     val trainDataRaw = generateSomeBalls(howMany, canvisSize, howMuchNoise);
-    val testDataRaw =  generateSomeBalls(howMany, canvisSize, howMuchNoise);
+    val testDataRaw = generateSomeBalls(howMany, canvisSize, howMuchNoise);
     val trainingData = trainDataRaw.map(T => LabeledObject(
-                superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 0.5) 1 else 0), 
-                hist3d(T._1, numBins, superPixSize)))
+      superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 0.5) 1 else 0),
+      hist3d(T._1, numBins, superPixSize)))
     val testData = testDataRaw.map(T => LabeledObject(
-                superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 0.5) 1 else 0), 
-                hist3d(T._1, numBins, superPixSize)))
+      superLabels3d(T._2, superPixSize, TMP => if (this.mean(TMP) > 0.5) 1 else 0),
+      hist3d(T._1, numBins, superPixSize)))
     return (trainingData, testData)
   }
 

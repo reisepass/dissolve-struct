@@ -474,7 +474,12 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], NominalT
     val startTime = System.currentTimeMillis()
     val decoded = decodeFn(thetaUnary, thetaPairwise, numCols, numRows, numStack, debug = false)
     val decodeTimeMillis = System.currentTimeMillis() - startTime
-    print( "Decoding took : " + Math.round(decodeTimeMillis/1000) +"s")
+    
+    //TODO add if debug == true for this test
+    if ( yi != null) {
+    print( if(decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" +  "Decoding took : " + Math.round(decodeTimeMillis/1000) +"s")
+    }
+    
     return decoded
   }
   def predictFn(model: StructSVMModel[ThreeDimMat[Array[Double]], NominalThreeDimMat[Int]], xi: ThreeDimMat[Array[Double]]): NominalThreeDimMat[Int] = {
@@ -577,7 +582,7 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], NominalT
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
 
-      solverOptions.debug = false
+      solverOptions.debug = true
       solverOptions.debugMultiplier = 1
     }
 
