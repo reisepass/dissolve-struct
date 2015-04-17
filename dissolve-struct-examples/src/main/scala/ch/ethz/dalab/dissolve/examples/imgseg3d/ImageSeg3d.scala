@@ -587,7 +587,7 @@ object ImageSeg3d extends DissolveFunctions[ThreeDimMat[Array[Double]], NominalT
     }
 
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
-    val (trainData, testData) = ThreeDimUtils.generateSomeData(20, 25, 3, 5, 2)
+    val (trainData, testData) = ThreeDimUtils.generateSomeData(20, 25, 3, 5, 0.1)
     solverOptions.numClasses = 2
 
     println(solverOptions.toString())

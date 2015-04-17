@@ -34,7 +34,7 @@ class Img3dSegSanityCheck extends FlatSpec {
   solverOptions.debug = false
   solverOptions.debugMultiplier = 1
   solverOptions.numClasses = 2
-  val (trainData, testData) = ThreeDimUtils.generateSomeData(20, 25, 3, 5, 2)
+  val (trainData, testData) = ThreeDimUtils.generateSomeData(20, 25, 3, 5, 0.1)
 
   it should "be the inverse of the true Y if w initialized as a vector of zeros " in {
     val conf = new SparkConf().setAppName(appName).setMaster("local")

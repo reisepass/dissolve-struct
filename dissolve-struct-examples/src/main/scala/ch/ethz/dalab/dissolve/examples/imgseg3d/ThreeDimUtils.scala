@@ -367,7 +367,6 @@ object ThreeDimUtils {
     //var outHist = new Array[Array[Array[Array[Int]]]](xDim)
 
     val numSupPixelPerX = floor(xDim / superPixSize)
-
     val numSupPixelPerY = floor(yDim / superPixSize)
     val numSupPixelPerZ = floor(zDim / superPixSize)
 
@@ -381,7 +380,7 @@ object ThreeDimUtils {
     def patchHist(x: Int, y: Int, z: Int): Array[Double] = {
       var localHist: Array[Double] = Array.fill(numBins)(0.0);
       for {
-        xIdx <- x until (x + superPixSize); yIdx <- y until (y + superPixSize); zIdx <- 0 until (z + superPixSize)
+        xIdx <- x until (x + superPixSize); yIdx <- y until (y + superPixSize); zIdx <- z until (z + superPixSize)
       } {
         var insertIDX = floor((dataIn(xIdx)(yIdx)(zIdx)) / histBinSize).asInstanceOf[Int]
         if (insertIDX == numBins)
@@ -483,19 +482,7 @@ object ThreeDimUtils {
       hist3d(T._1, numBins, superPixSize)))
     return (trainingData, testData)
   }
-
-  /*
-  //TODO Bookmark Next creat the histogram features on these grey scale arrays 
-  def genSome3dData(size: Int): (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) = {
-    val canvisSize = size;
-    val radius = canvisSize / 4
-    val centerX, centerY, centerZ = floor(canvisSize / 2)
-    val innerRadius = canvisSize / 4 - canvisSize / 5
-    val (hollowBall, hollowBallLabel) = genSomeShapesGrey(size, 0, (x: Int, y: Int, z: Int) => if (Math.sqrt(((centerX - x) ^ 2 + (centerY - y) ^ 2 + (centerZ - z) ^ 2)) < radius && Math.sqrt(((centerX - x) ^ 2 + (centerY - y) ^ 2 + (centerZ - z) ^ 2)) > innerRadius) Int.MaxValue else 1)
-
-  }
-  * 
-  */
+  
 
   def main(args: Array[String]): Unit = {
 
