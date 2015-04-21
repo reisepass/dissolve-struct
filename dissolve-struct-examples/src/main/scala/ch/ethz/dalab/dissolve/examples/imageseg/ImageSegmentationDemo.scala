@@ -339,8 +339,14 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
 
     val model = new ItemizedModel //TODO read a factori example on how to use ItemizedModel 
     model ++= unaries
-    if (!DISABLE_PAIRWISE) model ++= pairwise
+    print("Unary Factor Graph Size: "+model.factors.size)//TODO remove
+ 
+    if (!DISABLE_PAIRWISE) {
+      model ++= pairwise
+          print("Also Pairwise Factor Graph Size: "+model.factors.size)//TODO remove
+    }
 
+    print("Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(pixels, model).mapAssignment //Where the magic happens 

@@ -3,11 +3,9 @@ package ch.ethz.dalab.dissolve.examples.neighbourhood
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.Buffer
 import scala.io.Source
-
 import org.apache.log4j.PropertyConfigurator
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
-
 import breeze.linalg.DenseMatrix
 import breeze.linalg.DenseVector
 import breeze.linalg.Vector
@@ -31,6 +29,7 @@ import ch.ethz.dalab.dissolve.optimization.DissolveFunctions
 import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
+import scala.collection.mutable.HashSet
 
 
 object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels] with Serializable{
@@ -122,22 +121,28 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
     }
       
    val labelParams = Array.fill(graph.size){new Pixel(0)}
-   
+   val nodePairsUsed: HashSet[(Int,Int)] = new HashSet[(Int,Int)]() 
    for ( idx <- 0 until labelParams.length){
      model ++= new Factor1(labelParams(idx)) {
         def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)  
       } 
      
      if (!DISABLE_PAIRWISE){
+       
        graph.getC(idx).foreach { neighbour => {
+         if(!nodePairsUsed.contains((idx,neighbour.idx)) && !nodePairsUsed.contains((neighbour.idx,idx))){ //This prevents adding neighbours twice 
+         nodePairsUsed.add((idx,neighbour.idx))
          model ++= new Factor2(labelParams(idx), labelParams(neighbour.idx)) {
             def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)
+         }
          }
        }}
      }
    }
-
+   
+   
     
+  //  print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
