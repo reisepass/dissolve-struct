@@ -43,7 +43,7 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
   def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
     assert(xDat.graphNodes.size == yDat.d.size)
     
-    val xFeatures = xDat.graphNodes.size
+    val xFeatures = xDat.getF(0).size
     val numClasses = yDat.numClasses
     
     val unaryFeatureSize = xFeatures * numClasses
@@ -156,7 +156,9 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
  
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
     
-    val numClasses = yi.numClasses
+    
+
+    val numClasses = model.numClasses
 
     val numDims = xi.getF(0).length
 

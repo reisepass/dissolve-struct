@@ -33,7 +33,7 @@ import ch.ethz.dalab.dissolve.examples.imageseg.ImageSegmentationDemo
 
 
 class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
-                                           dataLink: HashMap[Int, OriginalCoord]) { //dataLink could be a Vector, no reason for hashMap
+                                           dataLink: HashMap[Int, OriginalCoord]) extends Serializable{ //dataLink could be a Vector, no reason for hashMap
 
   def graphNodes = graph
   def dataGraphLink = dataLink
@@ -42,6 +42,7 @@ class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
   def get(i:Int): Node[Features] = { graphNodes(i)}
   def getC(i:Int): scala.collection.mutable.Set[Node[Features]] = { graphNodes(i).connections}
   def size = graphNodes.size
+   
 }
 
 case class Node[Features](
@@ -57,7 +58,7 @@ case class Node[Features](
 
 
 case class GraphLabels ( d:Vector[Int],numClasses:Int){
-  
+  assert(numClasses>0)
   def isInverseOf(other: GraphLabels): Boolean = {
     if(other.d.size !=d.size)
       return false
@@ -81,7 +82,7 @@ object GraphUtils {
      
     }
   
-  def nodeCmp(e1: Node[_], e2: Node[_]) = (e1.idx < e2.idx)
+  def nodeCmp(e1: Node[_], e2: Node[_]) = (e1.idx <   e2.idx)
 
 def d3randomVecDlb () : D3ArrDbl={
       Array.fill[Double](10,10,10){Math.random()}
@@ -96,7 +97,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   
   
   val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]
-  val labelVect = Array.fill(nodeVect.size)(0)
+  val labelVect = Array.fill(xi.rows*xi.cols)(0)
    val linkCoord = new HashMap[Int,(Int,Int,Int)]()
     val coordNode = new HashMap[(Int,Int,Int),Node[Vector[Double]]]()
   for( rIdx <- 0 until xi.rows){
@@ -111,7 +112,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   }  
   val sortedNodeList = nodeList.sortWith(nodeCmp) //TODO make sure this is increasing order from 
   assert(sortedNodeList.length == xi.rows*xi.cols)
-  assert(sortedNodeList(0)==0&&sortedNodeList(1)==1&&sortedNodeList(2)==2)
+  assert(sortedNodeList(0).idx==0 && sortedNodeList(1).idx==1  && sortedNodeList(2).idx==2)
   val nodeVect = Vector(sortedNodeList.toArray)
    
    

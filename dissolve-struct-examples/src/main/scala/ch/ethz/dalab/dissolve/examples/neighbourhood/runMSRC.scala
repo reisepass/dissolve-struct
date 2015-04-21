@@ -78,25 +78,26 @@ object runMSRC {
       solverOptions.debug = true
       solverOptions.debugMultiplier = 1
     }
-
+   solverOptions.numClasses = 24
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
    
-     val (trainData, testData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
+     val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
      
-     val graphTrainD = for ( i <- 0 until trainData.size) yield{ 
-        val ( gTrain, gLabel) =  GraphUtils.convertOT_msrc_toGraph(trainData(i).pattern, trainData(i).label,solverOptions.numClasses)
+     val graphTrainD = for ( i <- 0 until oldtrainData.size) yield{ 
+        val ( gTrain, gLabel) =  GraphUtils.convertOT_msrc_toGraph(oldtrainData(i).pattern, oldtrainData(i).label,solverOptions.numClasses)
         new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int,Int,Int)], GraphLabels](gLabel,gTrain)
      }
-     val graphTestD = for ( i <- 0 until testData.size) yield{
-        val ( gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(testData(i).pattern, testData(i).label,solverOptions.numClasses)
+     val graphTestD = for ( i <- 0 until oldtestData.size) yield{
+        val ( gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtestData(i).pattern, oldtestData(i).label,solverOptions.numClasses)
         new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int,Int,Int)], GraphLabels](gLabel,gTrain)
      }
-    val tmp =  scala.collection.Seq(graphTestD.toArray)
-    //BOOKMARK  fix the blow errors by exchanging all the trainData -> graphTrainD
-    solverOptions.numClasses = 2
+    val trainData = graphTrainD.toArray.toSeq
+    val testData = graphTestD.toArray.toSeq
+    
+ 
 
     println(solverOptions.toString())
-
+    
     val conf =
       if (runLocally)
         new SparkConf().setAppName(appName).setMaster("local")
@@ -110,9 +111,9 @@ object runMSRC {
 
     solverOptions.testDataRDD =
       if (solverOptions.enableManualPartitionSize)
-        Some(sc.parallelize(scala.collection.Seq(graphTrainD.toSeq), solverOptions.NUM_PART))
+        Some(sc.parallelize( trainData, solverOptions.NUM_PART))
       else
-        Some(sc.parallelize(scala.collection.Seq(graphTrainD.toArray)))
+        Some(sc.parallelize(trainData))
 
     val trainDataRDD =
       if (solverOptions.enableManualPartitionSize)
@@ -133,7 +134,7 @@ object runMSRC {
 
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)
-      avgTrainLoss += lossFn(item.label, prediction)
+      avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
     }
     avgTrainLoss = avgTrainLoss / trainData.size
     println("\nTRAINING: Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
@@ -141,7 +142,7 @@ object runMSRC {
     avgTrainLoss = 0.0
      for (item <- testData) {
       val prediction = model.predict(item.pattern)
-      avgTrainLoss += lossFn(item.label, prediction)
+      avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
     }
     avgTrainLoss = avgTrainLoss / testData.size
     println("\nTest Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
