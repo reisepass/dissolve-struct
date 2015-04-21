@@ -12,6 +12,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import ch.ethz.dalab.dissolve.examples.neighbourhood._
 import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.regression.LabeledObject
+import breeze.linalg.Vector
 
 object runMSRC {
   
@@ -90,7 +91,7 @@ object runMSRC {
         val ( gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(testData(i).pattern, testData(i).label,solverOptions.numClasses)
         new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int,Int,Int)], GraphLabels](gLabel,gTrain)
      }
-    
+    val tmp =  scala.collection.Seq(graphTestD.toArray)
     //BOOKMARK  fix the blow errors by exchanging all the trainData -> graphTrainD
     solverOptions.numClasses = 2
 
@@ -109,9 +110,9 @@ object runMSRC {
 
     solverOptions.testDataRDD =
       if (solverOptions.enableManualPartitionSize)
-        Some(sc.parallelize(testData.toSeq, solverOptions.NUM_PART))
+        Some(sc.parallelize(scala.collection.Seq(graphTrainD.toSeq), solverOptions.NUM_PART))
       else
-        Some(sc.parallelize(testData.toSeq))
+        Some(sc.parallelize(scala.collection.Seq(graphTrainD.toArray)))
 
     val trainDataRDD =
       if (solverOptions.enableManualPartitionSize)
