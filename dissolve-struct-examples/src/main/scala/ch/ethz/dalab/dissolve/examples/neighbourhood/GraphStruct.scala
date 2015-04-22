@@ -181,20 +181,25 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   assert(sortedNodeList(0).idx==0 && sortedNodeList(1).idx==1  && sortedNodeList(2).idx==2)
   val nodeVect = Vector(sortedNodeList.toArray)
    
-   
+
     linkCoord.keySet.foreach {  key => {
-        val coords = linkCoord.get(key).get
-        nodeVect(key).connections++=coordNode.get((coords._1+1,coords._2,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2+1,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._2+1))
-        nodeVect(key).connections++=coordNode.get((coords._1-1,coords._2,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2-1,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._2-1))
-        
+        val coords:(Int,Int,Int) = linkCoord.get(key).get
+        nodeVect(key).connections++=coordNode.get((coords._1+1,coords._2,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2+1,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3+1))
+        nodeVect(key).connections++=coordNode.get((coords._1-1,coords._2,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2-1,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3-1))
       
     } }
+  
+
     
-    
+    println("")
+  //TODO remove, debug stuff 
+  val allConnSize = for( i <- 0 until nodeVect.size) yield{
+    nodeVect(i).connections.size
+  }
   
    
   (new GraphStruct(nodeVect,linkCoord,(xi.rows-1,xi.cols-1,0)), new GraphLabels(Vector(labelVect),numClasses))
@@ -276,6 +281,13 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     
     
     
+    
+
+    
+ 
+    
+  
+    
     val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]
     var counter =0;
     //val coordLink = new HashMap[(Int,Int,Int),Int]()
@@ -301,12 +313,12 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     
     linkCoord.keySet.foreach {  key => {
         val coords = linkCoord.get(key).get
-        nodeVect(key).connections++=coordNode.get((coords._1+1,coords._2,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2+1,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._2+1))
-        nodeVect(key).connections++=coordNode.get((coords._1-1,coords._2,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2-1,coords._2))
-        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._2-1))
+        nodeVect(key).connections++=coordNode.get((coords._1+1,coords._2,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2+1,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3+1))
+        nodeVect(key).connections++=coordNode.get((coords._1-1,coords._2,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2-1,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3-1))
         
       
     } }
