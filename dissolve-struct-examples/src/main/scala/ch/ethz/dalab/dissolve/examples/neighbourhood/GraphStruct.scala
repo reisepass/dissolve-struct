@@ -30,13 +30,20 @@ import scala.collection.mutable.LinkedList
 import ch.ethz.dalab.dissolve.examples.imageseg.ROIFeature
 import ch.ethz.dalab.dissolve.examples.imageseg.ROILabel
 import ch.ethz.dalab.dissolve.examples.imageseg.ImageSegmentationDemo
+import java.awt.Graphics2D
+import scala.collection.mutable.ArrayBuffer
+import java.awt.geom.AffineTransform
+import ch.ethz.dalab.dissolve.examples.imageseg.ImageSegmentationUtils
+
 
 
 class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
-                                           dataLink: HashMap[Int, OriginalCoord]) extends Serializable{ //dataLink could be a Vector, no reason for hashMap
+                                           dataLink: HashMap[Int, OriginalCoord],
+                                           maxCoordnate: OriginalCoord) extends Serializable{ //dataLink could be a Vector, no reason for hashMap
 
   def graphNodes = graph
   def dataGraphLink = dataLink
+  def maxCoord = maxCoordnate
 //TODO Add?? mapping from original xyz to nodes. For prediction we need something like this but it could be more efficient to just have a print out method that returns a xyz matrix 
   def getF(i:Int): Features ={graphNodes(i).features}
   def get(i:Int): Node[Features] = { graphNodes(i)}
@@ -75,12 +82,71 @@ case class GraphLabels ( d:Vector[Int],numClasses:Int){
 
 
 object GraphUtils {
+  
+import javax.imageio.ImageIO;
+import java.io.File;
+import java.io.IOException;
+import java.awt.image.BufferedImage;
+  
   type D3ArrInt = Array[Array[Array[Int]]]
   type D3ArrDbl = Array[Array[Array[Double]]]
       def randomVec () : Array[Double]={
       Array.fill[Double](10){Math.random()}
      
     }
+  
+  
+  def reConstruct3dMat(labels:GraphLabels, dataLink: HashMap[Int,(Int,Int,Int)],xDim:Int,yDim:Int,zDim:Int): D3ArrInt= {
+    
+    val out = Array.fill(xDim,yDim,zDim){0}
+    for( i<-0 until labels.d.size){
+      val coords = dataLink.get(i).get
+      out(coords._1)(coords._2)(coords._3)=labels.d(i)
+    }
+    out
+  }
+  
+  //TODO find a nice scala-esq way of doing this. essencially i want the matlab function 'squeeze'
+  def flatten3rdDim(in:D3ArrInt):Array[Array[Int]]={ 
+      
+    val xDim = in.length
+    val yDim = in(0).length
+    val out = Array.fill(xDim,yDim){0}
+    for( x <-0 until in.length){
+        for(y <-0 until in(0).length){
+          out(x)(y)=in(x)(y)(0)  
+        }
+      }
+    return out
+
+  }
+  def printBMPfrom3dMat (in:Array[Array[Int]], fileName:String)={
+   
+    val xDim = in.length
+    val yDim = in(0).length
+    val img: BufferedImage  = new BufferedImage(xDim, yDim,
+    BufferedImage.TYPE_INT_RGB);
+    for( x <- 0 until xDim){
+      for (y <- 0 until yDim){
+        val tmp =ImageSegmentationUtils.colormapRev
+        val toGet = in(x)(y)
+        val tmpRGB = ImageSegmentationUtils.colormapRev.get(toGet)
+        if ( tmpRGB.isEmpty){
+          print("oops")
+        }
+        val rgb = tmpRGB.get
+        img.setRGB(x, y, rgb)
+      }
+    }
+    
+    //TODO change the path. We dont want to assume things about the file structure below the pwd 
+    ImageIO.write(img, "BMP", new File("../data/debug/"+fileName));
+    
+  }
+  
+  
+
+  
   
   def nodeCmp(e1: Node[_], e2: Node[_]) = (e1.idx <   e2.idx)
 
@@ -131,7 +197,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     
   
    
-  (new GraphStruct(nodeVect,linkCoord), new GraphLabels(Vector(labelVect),numClasses))
+  (new GraphStruct(nodeVect,linkCoord,(xi.rows-1,xi.cols-1,0)), new GraphLabels(Vector(labelVect),numClasses))
 }
 
   def cutSuperPix(dataIn :  D3ArrInt,
@@ -210,13 +276,6 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     
     
     
-    
-
-    
- 
-    
-  
-    
     val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]
     var counter =0;
     //val coordLink = new HashMap[(Int,Int,Int),Int]()
@@ -253,6 +312,6 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     } }
     
 
-   new GraphStruct[Vector[Double],(Int,Int,Int)](nodeVect,linkCoord)
+   new GraphStruct[Vector[Double],(Int,Int,Int)](nodeVect,linkCoord,(xDim-1,yDim-1,zDim-1))
   }
 }

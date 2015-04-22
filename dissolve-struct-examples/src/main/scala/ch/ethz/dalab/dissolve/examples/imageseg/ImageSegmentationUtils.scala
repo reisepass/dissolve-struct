@@ -42,6 +42,15 @@ object ImageSegmentationUtils {
         value.toInt -> label.toInt
     }
     .toMap
+    
+    val colormapRev: Map[Int, Int] = Source.fromURL(getClass.getResource(colormapFile))
+    .getLines()
+    .map { line => line.split(" ") }
+    .map {
+      case Array(label, value, r, g, b, className) =>
+        label.toInt -> value.toInt 
+    }
+    .toMap
 
   val labFreqFile =
     if (ImageSegmentationDemo.RUN_SYNTH)

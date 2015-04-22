@@ -13,11 +13,11 @@ import ch.ethz.dalab.dissolve.examples.neighbourhood._
 import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.regression.LabeledObject
 import breeze.linalg.Vector
+import breeze.linalg.DenseMatrix
 
 object runMSRC {
-  
-  
-   def main(args: Array[String]): Unit = {
+
+  def main(args: Array[String]): Unit = {
 
     PropertyConfigurator.configure("conf/log4j.properties")
 
@@ -35,6 +35,14 @@ object runMSRC {
   }
   def runStuff(options: Map[String, String]) {
 
+    //Test some stuff 
+    //TODO remove the below
+    val some3d = Array.fill(3, 3, 1) { Math.round(100 * Math.random()).asInstanceOf[Int] }
+    val some2d = GraphUtils.flatten3rdDim(some3d)
+
+    //
+    //
+
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
     val runLocally: Boolean = options.getOrElse("local", "true").toBoolean
@@ -44,7 +52,7 @@ object runMSRC {
 
     val appName: String = "ImageSegGraph"
 
-    val solverOptions: SolverOptions[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels] = new SolverOptions()
+    val solverOptions: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new SolverOptions()
     solverOptions.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
     solverOptions.lambda = options.getOrElse("lambda", "0.01").toDouble
@@ -78,26 +86,55 @@ object runMSRC {
       solverOptions.debug = true
       solverOptions.debugMultiplier = 1
     }
-   solverOptions.numClasses = 24
+    solverOptions.numClasses = 24
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
-   
-     val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
-     
-     val graphTrainD = for ( i <- 0 until oldtrainData.size) yield{ 
-        val ( gTrain, gLabel) =  GraphUtils.convertOT_msrc_toGraph(oldtrainData(i).pattern, oldtrainData(i).label,solverOptions.numClasses)
-        new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int,Int,Int)], GraphLabels](gLabel,gTrain)
-     }
-     val graphTestD = for ( i <- 0 until oldtestData.size) yield{
-        val ( gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtestData(i).pattern, oldtestData(i).label,solverOptions.numClasses)
-        new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int,Int,Int)], GraphLabels](gLabel,gTrain)
-     }
+
+    val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
+
+    val graphTrainD = for (i <- 0 until oldtrainData.size) yield {
+      val (gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtrainData(i).pattern, oldtrainData(i).label, solverOptions.numClasses)
+      new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
+    }
+    val graphTestD = for (i <- 0 until oldtestData.size) yield {
+      val (gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtestData(i).pattern, oldtestData(i).label, solverOptions.numClasses)
+      new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
+    }
     val trainData = graphTrainD.toArray.toSeq
     val testData = graphTestD.toArray.toSeq
+
+    //TODO remove this debug (this could be made into a testcase ) 
+    val compAll = for ( i <- 0 until 10) yield{
+    val first = trainData(i)
+    val old = oldtrainData(i).label
+
+    val re = GraphUtils.reConstruct3dMat(first.label, first.pattern.dataGraphLink,
+      first.pattern.maxCoord._1+1,
+      first.pattern.maxCoord._2+1, first.pattern.maxCoord._3+1)
+    val flatRe = GraphUtils.flatten3rdDim(re)
     
- 
+    def compareROIl( left : DenseMatrix[ROILabel], right : Array[Array[Int]] ):Int={
+      var counter =0;
+      for( r <- 0 until left.rows){
+        for( c <- 0 until left.cols){
+          if(left(r,c).label!=right(r)(c))
+            counter +=1
+        }
+      }
+      return counter
+    }
+    val tmp = compareROIl(old,flatRe)
+    print("dif "+ tmp)
+    //Now lets print the pictures 
+    GraphUtils.printBMPfrom3dMat(flatRe,"reconst_"+i+"_.bmp");
+    
+    //
+    tmp
+    }
+      
+    //
 
     println(solverOptions.toString())
-    
+
     val conf =
       if (runLocally)
         new SparkConf().setAppName(appName).setMaster("local")
@@ -111,7 +148,7 @@ object runMSRC {
 
     solverOptions.testDataRDD =
       if (solverOptions.enableManualPartitionSize)
-        Some(sc.parallelize( trainData, solverOptions.NUM_PART))
+        Some(sc.parallelize(trainData, solverOptions.NUM_PART))
       else
         Some(sc.parallelize(trainData))
 
@@ -121,16 +158,15 @@ object runMSRC {
       else
         sc.parallelize(trainData)
 
-    val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels] =
-      new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels](
+    val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
+      new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,
-        GraphSegmentation, 
+        GraphSegmentation,
         solverOptions)
 
-    val model: StructSVMModel[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels] = trainer.trainModel()
+    val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = trainer.trainModel()
 
     var avgTrainLoss = 0.0
-   
 
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)
@@ -140,7 +176,7 @@ object runMSRC {
     println("\nTRAINING: Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
     //Test Error 
     avgTrainLoss = 0.0
-     for (item <- testData) {
+    for (item <- testData) {
       val prediction = model.predict(item.pattern)
       avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
     }
@@ -148,8 +184,5 @@ object runMSRC {
     println("\nTest Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
 
   }
-  
-  
- 
 
 }
