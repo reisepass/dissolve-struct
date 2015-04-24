@@ -78,6 +78,8 @@ object ImageSegmentationUtils {
         label.toInt -> rgb
     }
     .toMap
+    
+    
 
   def printLabeledImage(img: DenseMatrix[ROILabel], outputFile: String): Unit = {
 

@@ -31,6 +31,7 @@ import ch.ethz.dalab.dissolve.optimization.DissolveFunctions
 import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
+import ch.ethz.dalab.dissolve.examples.neighbourhood._
 
 case class ROIFeature(feature: Vector[Double], name: String = "NA") // Represent each pixel/region by a feature vector
 
@@ -45,7 +46,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
 
   val RUN_SYNTH = false
   var DISABLE_PAIRWISE = true
-
+  //println("ImageSegmentationDemo::: ( DISABLE_PAIRWISE="+DISABLE_PAIRWISE+")")
   /**
    * Given:
    * - a matrix xMat of super-pixels, of size r = n x m, and x_i, an f-dimensional vector
@@ -288,10 +289,10 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
     }
 
     def getUnaryFactor(yi: Pixel, x: Int, y: Int): Factor = {
-      new Factor1(yi) {//TODO ask OT,  it appears that yi is not being used for anything. 
-        val r = columnMajorIdx(x, y, image.size)  //image.size == imageHeight 
-        def score(k: Pixel#Value) = thetaUnary(r, k.intValue)  
-      }    
+      new Factor1(yi) { //TODO ask OT,  it appears that yi is not being used for anything. 
+        val r = columnMajorIdx(x, y, image.size) //image.size == imageHeight 
+        def score(k: Pixel#Value) = thetaUnary(r, k.intValue)
+      }
     }
 
     def getPairwiseFactor(yi: Pixel, yj: Pixel): Factor = { //Adapter method for the Factorie types Pixel to get the theta of their member values 
@@ -314,7 +315,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
           (r, pix)
       }
 
-    val pixels: IndexedSeq[Pixel] = indexedPixels.map(_._2)  //TODO understand this _._2 notation. I'm guessing this is just removing the (x,y) and just saving the other part in an array 
+    val pixels: IndexedSeq[Pixel] = indexedPixels.map(_._2) //TODO understand this _._2 notation. I'm guessing this is just removing the (x,y) and just saving the other part in an array 
 
     val unaries: IndexedSeq[Factor] = indexedPixels.map {
       case ((x, y), pix) =>
@@ -339,14 +340,14 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
 
     val model = new ItemizedModel //TODO read a factori example on how to use ItemizedModel 
     model ++= unaries
-    print("Unary Factor Graph Size: "+model.factors.size)//TODO remove
- 
+    print("Unary Factor Graph Size: " + model.factors.size) //TODO remove
+
     if (!DISABLE_PAIRWISE) {
       model ++= pairwise
-          print("Also Pairwise Factor Graph Size: "+model.factors.size)//TODO remove
+      print("Also Pairwise Factor Graph Size: " + model.factors.size) //TODO remove
     }
 
-    print("Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove
+    print("Input thetaUnary(" + thetaUnary.rows + "," + thetaUnary.cols + ")/nFactor Graph Size: " + model.factors.size) //TODO remove
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(pixels, model).mapAssignment //Where the magic happens 
@@ -490,13 +491,13 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
         case (r, c) =>
           val idx = columnMajorIdx(r, c, yi.rows)
           val yLab = yi(r, c)
-          thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / numROI  //We are using a zero-one loss per y so here there are just constants
+          thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / numROI //We are using a zero-one loss per y so here there are just constants
           // Loss augmentation step
           val k = yLab.label
-          thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / numROI  //This is a zero loss b/c it cancels out the +1 for all non correct labels 
-                                                                  //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
-                                                                  //     a whole image but inside it uses zero-one loss for pixel comparison 
-                                                                  //     this should be a function so it is common between the two uses 
+          thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / numROI //This is a zero loss b/c it cancels out the +1 for all non correct labels 
+        //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
+        //     a whole image but inside it uses zero-one loss for pixel comparison 
+        //     this should be a function so it is common between the two uses 
       }
 
     }
@@ -530,7 +531,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
     val debugDir: String = options.getOrElse("debugdir", "../debug")
 
     val runLocally: Boolean = options.getOrElse("local", "true").toBoolean
-    
+
     DISABLE_PAIRWISE = options.getOrElse("onlyunaries", "false").toBoolean
 
     val solverOptions: SolverOptions[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]] = new SolverOptions()
@@ -557,11 +558,11 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
      * Some local overrides
      */
     if (runLocally) {
-      solverOptions.sampleFrac = 0.5
+      solverOptions.sampleFrac = 0.2
       solverOptions.enableOracleCache = false
       solverOptions.oracleCacheSize = 100
       solverOptions.stoppingCriterion = RoundLimitCriterion
-      solverOptions.roundLimit = 5
+      solverOptions.roundLimit = 2
       solverOptions.enableManualPartitionSize = true
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
@@ -623,8 +624,26 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
     println("Average loss on training set = %f".format(avgTrainLoss / trainData.size))
 
     var avgTestLoss: Double = 0.0
+    var count = 0;
     for (item <- testData) {
       val prediction = model.predict(item.pattern)
+
+      val rawPredMat = Array.fill(prediction.rows, prediction.cols) { 0 }
+      prediction.iterator.foreach {
+        case ((x, y), l) =>
+          rawPredMat(x)(y) = l.label
+      }
+      
+     
+      val rawTrueMat = Array.fill(prediction.rows, prediction.cols) { 0 }
+      item.label.iterator.foreach {
+        case ((x, y), l) =>
+          rawTrueMat(x)(y) = l.label
+      }
+
+      GraphUtils.printBMPfrom3dMat(rawTrueMat, "imgTest" + count + "trueOT.bmp")
+      GraphUtils.printBMPfrom3dMat(rawPredMat, "imgTest" + count + "predOT.bmp")
+      count += 1
       avgTestLoss += lossFn(item.label, prediction)
     }
     println("Average loss on test set = %f".format(avgTestLoss / testData.size))
