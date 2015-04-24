@@ -33,7 +33,7 @@ import scala.collection.mutable.HashSet
 
 
 object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels] with Serializable{
-  val DISABLE_PAIRWISE: Boolean = false
+  val DISABLE_PAIRWISE: Boolean = true
   type xData = GraphStruct[Vector[Double], (Int,Int,Int)]
   type yLabels = GraphLabels
   
@@ -146,7 +146,7 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
-
+     val assgnMean = cc.factorie.infer.InferByMeanField.infer(labelParams,model)
     // Retrieve assigned labels from these pixels
 
     val out = Array.fill[Int](graph.size)(0)
