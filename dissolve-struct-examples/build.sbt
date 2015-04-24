@@ -4,13 +4,15 @@ organization := "ch.ethz.dalab"
 
 version := "0.1-SNAPSHOT"
 
-scalaVersion := "2.10.4"
+scalaVersion := "2.10.5"
 
 libraryDependencies += "ch.ethz.dalab" %% "dissolvestruct" % "0.1-SNAPSHOT"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.10" % "2.0" % "test"
 
 libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
+
+libraryDependencies += "org.parboiled" %% "parboiled" % "2.1.0"
 
 libraryDependencies += "org.apache.spark" %% "spark-core" % "1.2.1"
 

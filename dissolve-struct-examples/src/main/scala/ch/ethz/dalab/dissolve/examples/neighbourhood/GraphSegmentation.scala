@@ -37,7 +37,7 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
   type xData = GraphStruct[Vector[Double], (Int,Int,Int)]
   type yLabels = GraphLabels
   
-  
+  println("GraphSegmentation::: (DISABLE_PAIRWISE= "+DISABLE_PAIRWISE+" )")
   //Convert the graph into one big feature vector 
   def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
     assert(xDat.graphNodes.size == yDat.d.size)

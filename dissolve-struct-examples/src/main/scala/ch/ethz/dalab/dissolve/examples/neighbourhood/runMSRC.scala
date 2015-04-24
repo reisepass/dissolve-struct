@@ -75,11 +75,11 @@ object runMSRC {
      * Some local overrides
      */
     if (runLocally) {
-      solverOptions.sampleFrac = 0.5
+      solverOptions.sampleFrac = 0.2
       solverOptions.enableOracleCache = false
       solverOptions.oracleCacheSize = 100
       solverOptions.stoppingCriterion = RoundLimitCriterion
-      solverOptions.roundLimit = 5
+      solverOptions.roundLimit = 1
       solverOptions.enableManualPartitionSize = true
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
@@ -103,6 +103,7 @@ object runMSRC {
     val testData = graphTestD.toArray.toSeq
 
     //TODO remove this debug (this could be made into a testcase ) 
+    if(false){
     val compAll = for ( i <- 0 until 10) yield{
     val first = trainData(i)
     val old = oldtrainData(i).label
@@ -129,6 +130,7 @@ object runMSRC {
     
     //
     tmp
+    }
     }
       
     //
@@ -168,17 +170,31 @@ object runMSRC {
 
     var avgTrainLoss = 0.0
 
+    var count=0
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)
+      
+      GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"true.bmp")
+      GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"pred.bmp")
       avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
+      count+=1
     }
     avgTrainLoss = avgTrainLoss / trainData.size
     println("\nTRAINING: Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
     //Test Error 
     avgTrainLoss = 0.0
+    count=0
     for (item <- testData) {
       val prediction = model.predict(item.pattern)
+      
+            GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"trueRW.bmp")
+      GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"predRW.bmp")
       avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
+      count+=1
     }
     avgTrainLoss = avgTrainLoss / testData.size
     println("\nTest Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
