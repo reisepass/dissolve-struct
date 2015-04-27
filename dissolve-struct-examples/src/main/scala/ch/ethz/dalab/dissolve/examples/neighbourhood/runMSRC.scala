@@ -34,12 +34,6 @@ object runMSRC {
     runStuff(options)
   }
   def runStuff(options: Map[String, String]) {
-
-    //Test some stuff 
-    //TODO remove the below
-    val some3d = Array.fill(3, 3, 1) { Math.round(100 * Math.random()).asInstanceOf[Int] }
-    val some2d = GraphUtils.flatten3rdDim(some3d)
-
     //
     //
 
@@ -198,6 +192,7 @@ object runMSRC {
     }
     avgTrainLoss = avgTrainLoss / testData.size
     println("\nTest Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
+    sc.stop()
 
   }
 
