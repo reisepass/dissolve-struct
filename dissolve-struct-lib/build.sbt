@@ -10,7 +10,9 @@ libraryDependencies += "org.apache.spark" %% "spark-core" % "1.2.1"
 
 libraryDependencies += "org.apache.spark" %% "spark-mllib" % "1.2.1"
 
-libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
+libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.1"
+
+libraryDependencies += "org.scalanlp" %% "breeze-natives" % "0.11.1"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.10" % "2.0" % "test"
 

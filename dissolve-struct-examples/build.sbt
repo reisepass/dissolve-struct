@@ -12,6 +12,7 @@ libraryDependencies += "org.scalatest" % "scalatest_2.10" % "2.0" % "test"
 
 libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
 
+
 libraryDependencies += "org.parboiled" %% "parboiled" % "2.1.0"
 
 libraryDependencies += "org.apache.spark" %% "spark-core" % "1.2.1"
