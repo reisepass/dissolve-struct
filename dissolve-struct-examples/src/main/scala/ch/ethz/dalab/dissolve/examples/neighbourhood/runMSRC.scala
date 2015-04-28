@@ -14,7 +14,11 @@ import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.regression.LabeledObject
 import breeze.linalg.Vector
 import breeze.linalg.DenseMatrix
-
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStreamReader
+import sys.process._
+ 
 object runMSRC {
 
   def main(args: Array[String]): Unit = {
@@ -36,24 +40,33 @@ object runMSRC {
   def runStuff(options: Map[String, String]) {
     //
     //
-
+    
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
     val runLocally: Boolean = options.getOrElse("local", "true").toBoolean
     val PERC_TRAIN: Double = 0.05 // Restrict to using a fraction of data for training (Used to overcome OutOfMemory exceptions while testing locally)
 
+    val gitV = ("git rev-parse HEAD"!!).replaceAll("""(?m)\s+$""", "")
+    val experimentName:String = options.getOrElse("runName", "UnNamed")
+    
     val msrcDir: String = "../data/generated"
 
     val appName: String = "ImageSegGraph"
 
+    val printImages: Boolean = options.getOrElse("printImages","false").toBoolean
+    
     val solverOptions: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new SolverOptions()
+    solverOptions.gitVersion = gitV
+    solverOptions.runName = experimentName
     solverOptions.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
     solverOptions.lambda = options.getOrElse("lambda", "0.01").toDouble
     solverOptions.doWeightedAveraging = options.getOrElse("wavg", "false").toBoolean
     solverOptions.doLineSearch = options.getOrElse("linesearch", "true").toBoolean
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
-
+    solverOptions.onlyUnary = options.getOrElse("onlyUnary", "false").toBoolean
+    GraphSegmentation.DISABLE_PAIRWISE = solverOptions.onlyUnary
+    
     solverOptions.sample = options.getOrElse("sample", "frac")
     solverOptions.sampleFrac = options.getOrElse("samplefrac", "0.5").toDouble
     solverOptions.sampleWithReplacement = options.getOrElse("samplewithreplacement", "false").toBoolean
@@ -65,6 +78,7 @@ object runMSRC {
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
 
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
+    
     /**
      * Some local overrides
      */
@@ -168,10 +182,12 @@ object runMSRC {
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)
       
+      if(printImages){
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"true.bmp")
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"pred.bmp")
+      }
       avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
       count+=1
     }
@@ -183,10 +199,12 @@ object runMSRC {
     for (item <- testData) {
       val prediction = model.predict(item.pattern)
       
+      if(printImages){
             GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"trueRW.bmp")
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"predRW.bmp")
+      }
       avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
       count+=1
     }

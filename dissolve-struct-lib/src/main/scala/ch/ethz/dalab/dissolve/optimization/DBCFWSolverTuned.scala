@@ -239,7 +239,14 @@ class DBCFWSolverTuned[X, Y](
 
       println("[%.3f] Round = %d, Gap = %f, Primal = %f, Dual = %f, TrainLoss = %f, TestLoss = %f"
         .format(elapsedTime, roundNum, dualityGap, primal, dual, trainError, testError))
-
+      
+        
+        println("#RoundProgTag# , %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s"
+        .format(solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
+            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f"  ))
+        //TODO need to add expID tag, maybe git Version 
+        
+        
       RoundEvaluation(roundNum, elapsedTime, primal, dual, dualityGap, trainError, testError)
     }
 
