@@ -32,7 +32,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
 object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
-  var DISABLE_PAIRWISE: Boolean = true
+  var DISABLE_PAIRWISE: Boolean = false
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
 
