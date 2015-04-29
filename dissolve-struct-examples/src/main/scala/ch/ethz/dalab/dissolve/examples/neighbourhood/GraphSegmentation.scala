@@ -32,7 +32,8 @@ import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
 object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
-  var DISABLE_PAIRWISE: Boolean = false
+  //TODO you need to make deefine a child object to GraphSegmentation which does pariwise disabled. Because changing the context of this variable is super unsafe and produces errors when using on spark
+  var DISABLE_PAIRWISE: Boolean = false //TODO this global is causing problems. It needs to be informed by the config file 
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
 
