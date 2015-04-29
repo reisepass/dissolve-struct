@@ -41,6 +41,7 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
   //Convert the graph into one big feature vector 
   def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
     assert(xDat.graphNodes.size == yDat.d.size)
+    //TODO remove, this is just for MSRC dataset debugging 
     
     val xFeatures = xDat.getF(0).size
     val numClasses = yDat.numClasses
@@ -64,8 +65,10 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
       val pairwise = normalize(getPairwiseFeatureMap(yDat, xDat).toDenseVector) //TODO does this toDenseVector actually use proper columnIndex form, or atleast is it deterministic ? 
       assert((phi.size-unaryFeatureSize) == pairwise.size)
       phi((unaryFeatureSize) until phi.size) := pairwise
+      println("pairwise.size=%d,xFeatures=%d,numClasses=%d,".format(pairwise,xFeatures,numClasses))
     }
-    
+ 
+    assert(phi.size == 12864)
     phi
   }
   

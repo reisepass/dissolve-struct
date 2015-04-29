@@ -84,7 +84,7 @@ object runMSRC {
      * Some local overrides
      */
     if (runLocally) {
-      solverOptions.sampleFrac = 0.2
+      solverOptions.sampleFrac = 1
       solverOptions.enableOracleCache = false
       solverOptions.oracleCacheSize = 100
       solverOptions.stoppingCriterion = RoundLimitCriterion
@@ -108,10 +108,23 @@ object runMSRC {
       val (gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtestData(i).pattern, oldtestData(i).label, solverOptions.numClasses)
       new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
     }
+    
+    //TODO chck if all X featuresa are same size 
     val trainData = graphTrainD.toArray.toSeq
     val testData = graphTestD.toArray.toSeq
 
-    //TODO remove this debug (this could be made into a testcase ) 
+    //TODO remove this debug (this could be made into a testcase )
+    if(true){
+        val first = trainData(0).pattern.getF(0).size
+      for ( i <- 0 until trainData.size){
+        for(s <- 0 until trainData(i).pattern.size){
+          assert(trainData(i).pattern.getF(s).size==first)
+        }
+        
+      }
+      println("#Fun all is well")
+    
+    }
     if(false){
     val compAll = for ( i <- 0 until 10) yield{
     val first = trainData(i)
