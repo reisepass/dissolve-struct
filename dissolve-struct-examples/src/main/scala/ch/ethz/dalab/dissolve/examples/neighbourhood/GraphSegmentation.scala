@@ -31,58 +31,59 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-
-object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int,Int,Int)],GraphLabels] with Serializable{
+object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
   var DISABLE_PAIRWISE: Boolean = true
-  type xData = GraphStruct[Vector[Double], (Int,Int,Int)]
+  type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
-  
-  println("GraphSegmentation::: (DISABLE_PAIRWISE= "+DISABLE_PAIRWISE+" )")
+
+  println("GraphSegmentation::: (DISABLE_PAIRWISE= " + DISABLE_PAIRWISE + " )")
   //Convert the graph into one big feature vector 
   def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
     assert(xDat.graphNodes.size == yDat.d.size)
     //TODO remove, this is just for MSRC dataset debugging 
-    
+
     val xFeatures = xDat.getF(0).size
     val numClasses = yDat.numClasses
-    
+
     val unaryFeatureSize = xFeatures * numClasses
     val pairwiseFeatureSize = numClasses * numClasses
     val phi = if (!DISABLE_PAIRWISE) DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize) else DenseVector.zeros[Double](unaryFeatureSize)
 
-    
     val unary = DenseVector.zeros[Double](unaryFeatureSize)
-    for ( idx <- 0 until yDat.d.size){
-        val label = yDat.d(idx)
-         val startIdx = label * xFeatures
-        val endIdx = startIdx + xFeatures
-        unary(startIdx until endIdx) := xDat.getF(idx) + unary(startIdx until endIdx)
+    for (idx <- 0 until yDat.d.size) {
+      val label = yDat.d(idx)
+      val startIdx = label * xFeatures
+      val endIdx = startIdx + xFeatures
+      unary(startIdx until endIdx) := xDat.getF(idx) + unary(startIdx until endIdx)
     }
-    
+
     phi(0 until (unaryFeatureSize)) := unary
-       
+
     if (!DISABLE_PAIRWISE) {
       val pairwise = normalize(getPairwiseFeatureMap(yDat, xDat).toDenseVector) //TODO does this toDenseVector actually use proper columnIndex form, or atleast is it deterministic ? 
-      assert((phi.size-unaryFeatureSize) == pairwise.size)
+      assert((phi.size - unaryFeatureSize) == pairwise.size)
       phi((unaryFeatureSize) until phi.size) := pairwise
-      println("pairwise.size=%d,xFeatures=%d,numClasses=%d,phi.size=%d".format(pairwise.size,xFeatures,numClasses,phi.size))
+      if (phi.size != 12864) {
+        println("#lookHere# pairwise.size=%d,xFeatures=%d,numClasses=%d,phi.size=%d".format(pairwise.size, xFeatures, numClasses, phi.size))
+        assert(false)
+      }
+
     }
- 
-    assert(phi.size == 12864)
+
     phi
   }
-  
+
   // Count pairwise occurances of classes. This is normalized on the outside 
-  def getPairwiseFeatureMap(yi : yLabels, xi : xData): DenseMatrix[Double] = {
-    
-      val pairwiseMat = DenseMatrix.zeros[Double](yi.numClasses, yi.numClasses)
-      for ( idx <- 0 until xi.size){
-         val myLabel = yi.d(idx)
-         xi.getC(idx).foreach { neighbour => {pairwiseMat(myLabel,yi.d(neighbour.idx)) += 1 }}
-       }
-      pairwiseMat
+  def getPairwiseFeatureMap(yi: yLabels, xi: xData): DenseMatrix[Double] = {
+
+    val pairwiseMat = DenseMatrix.zeros[Double](yi.numClasses, yi.numClasses)
+    for (idx <- 0 until xi.size) {
+      val myLabel = yi.d(idx)
+      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour.idx)) += 1 } }
+    }
+    pairwiseMat
   }
-  
+
   def lossFn(yTruth: yLabels, yPredict: yLabels): Double = {
     assert(yPredict.d.size == yTruth.d.size)
     //val classFreqs = yTruth.classFreq
@@ -98,23 +99,22 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
 
     loss.sum / (yPredict.d.size)
   }
-  
-  def xFeatureStack (xi:xData) : DenseMatrix[Double] = {
-     val featureStack = DenseMatrix.zeros[Double](xi.getF(0).size, xi.size)
-     for ( i <- 0 until xi.size){
-       featureStack(::,i) := xi.getF(i)
-     }
-     featureStack
+
+  def xFeatureStack(xi: xData): DenseMatrix[Double] = {
+    val featureStack = DenseMatrix.zeros[Double](xi.getF(0).size, xi.size)
+    for (i <- 0 until xi.size) {
+      featureStack(::, i) := xi.getF(i)
+    }
+    featureStack
   }
 
-  
- def decodeFn(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph : xData, debug: Boolean = false): yLabels = {
+  def decodeFn(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, debug: Boolean = false): yLabels = {
 
     val model = new ItemizedModel
     val numRegions: Int = thetaUnary.rows
-    assert(numRegions==graph.size)
+    assert(numRegions == graph.size)
     val numClasses: Int = thetaUnary.cols
-    
+
     class RegionVar(val score: Int) extends IntegerVariable(score)
 
     object PixelDomain extends DiscreteDomain(numClasses)
@@ -122,49 +122,45 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
     class Pixel(i: Int) extends DiscreteVariable(i) { //i is just the initial value 
       def domain = PixelDomain
     }
-      
-   val labelParams = Array.fill(graph.size){new Pixel(0)}
-   val nodePairsUsed: HashSet[(Int,Int)] = new HashSet[(Int,Int)]() 
-   for ( idx <- 0 until labelParams.length){
-     model ++= new Factor1(labelParams(idx)) {
-        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)  
-      } 
-     
-     if (!DISABLE_PAIRWISE){
-       
-       graph.getC(idx).foreach { neighbour => {
-         if(!nodePairsUsed.contains((idx,neighbour.idx)) && !nodePairsUsed.contains((neighbour.idx,idx))){ //This prevents adding neighbours twice 
-         nodePairsUsed.add((idx,neighbour.idx))
-         model ++= new Factor2(labelParams(idx), labelParams(neighbour.idx)) {
-            def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)
-         }
-         }
-       }}
-     }
-   }
-   
-   
-    
-  //  print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
+
+    val labelParams = Array.fill(graph.size) { new Pixel(0) }
+    val nodePairsUsed: HashSet[(Int, Int)] = new HashSet[(Int, Int)]()
+    for (idx <- 0 until labelParams.length) {
+      model ++= new Factor1(labelParams(idx)) {
+        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)
+      }
+
+      if (!DISABLE_PAIRWISE) {
+
+        graph.getC(idx).foreach { neighbour =>
+          {
+            if (!nodePairsUsed.contains((idx, neighbour.idx)) && !nodePairsUsed.contains((neighbour.idx, idx))) { //This prevents adding neighbours twice 
+              nodePairsUsed.add((idx, neighbour.idx))
+              model ++= new Factor2(labelParams(idx), labelParams(neighbour.idx)) {
+                def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    //  print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
-     val assgnMean = cc.factorie.infer.InferByMeanField.infer(labelParams,model)
+    val assgnMean = cc.factorie.infer.InferByMeanField.infer(labelParams, model)
     // Retrieve assigned labels from these pixels
 
     val out = Array.fill[Int](graph.size)(0)
-    for( i <- 0 until out.size){
+    for (i <- 0 until out.size) {
       out(i) = assgn(labelParams(i)).intValue
     }
 
-
-    new GraphLabels( Vector(out),numClasses)
+    new GraphLabels(Vector(out), numClasses)
   }
 
- 
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
-    
-    
 
     val numClasses = model.numClasses
 
@@ -189,17 +185,17 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
     // If yi is present, do loss-augmentation
     if (yi != null) {
       for (idx <- 0 until xi.size) { //TODO check if this is using correct indexs 
-            thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / xi.size //We are using a zero-one loss per y so here there are just constants
-            // Loss augmentation step
-            val k = yi.d(idx)
-            thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / xi.size //This is a zero loss b/c it cancels out the +1 for all non correct labels 
-            //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
-            //     a whole image but inside it uses zero-one loss for pixel comparison 
-            //     this should be a function so it is common between the two uses 
+        thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / xi.size //We are using a zero-one loss per y so here there are just constants
+        // Loss augmentation step
+        val k = yi.d(idx)
+        thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / xi.size //This is a zero loss b/c it cancels out the +1 for all non correct labels 
+        //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
+        //     a whole image but inside it uses zero-one loss for pixel comparison 
+        //     this should be a function so it is common between the two uses 
 
       }
 
-    } 
+    }
 
     /**
      * Parameter estimation
@@ -207,19 +203,17 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
     val startTime = System.currentTimeMillis()
     val decoded = decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
     val decodeTimeMillis = System.currentTimeMillis() - startTime
-    
+
     //TODO add if debug == true for this test
-    if ( yi != null) {
-    print( if(decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" +  "Decoding took : " + Math.round(decodeTimeMillis/1000) +"s")
+    if (yi != null) {
+      print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis / 1000) + "s")
     }
-    
+
     return decoded
-    
+
   }
-  
 
-
- def unpackWeightVec(weightVec: Vector[Double], xFeatureSize: Int, numClasses: Int = 24, padded: Boolean = false): (DenseMatrix[Double], DenseMatrix[Double]) = {
+  def unpackWeightVec(weightVec: Vector[Double], xFeatureSize: Int, numClasses: Int = 24, padded: Boolean = false): (DenseMatrix[Double], DenseMatrix[Double]) = {
     // Unary features
     val startIdx = 0
     val endIdx = xFeatureSize * numClasses
@@ -253,11 +247,9 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
 
     (unaryPot, pairwisePot)
   }
-     
-    
-    def predictFn(model: StructSVMModel[xData, yLabels], xi: xData): yLabels = {
+
+  def predictFn(model: StructSVMModel[xData, yLabels], xi: xData): yLabels = {
     return oracleFn(model, xi, yi = null)
   }
-
 
 }
