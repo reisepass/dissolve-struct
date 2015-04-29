@@ -43,7 +43,7 @@ object runMSRC {
     
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
-    val runLocally: Boolean = options.getOrElse("local", "true").toBoolean
+    val runLocally: Boolean = options.getOrElse("local", "false").toBoolean
     val PERC_TRAIN: Double = 0.05 // Restrict to using a fraction of data for training (Used to overcome OutOfMemory exceptions while testing locally)
 
     val gitV = ("git rev-parse HEAD"!!).replaceAll("""(?m)\s+$""", "")
