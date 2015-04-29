@@ -33,7 +33,7 @@ class SolverOptions[X, Y] extends Serializable {
   var gitVersion = "Null"
   var runName = "UnNamed"
   var onlyUnary = false
-  var startTime = 0 //
+  var startTime = 0L //
   var sample: String = "frac"
   var lambda: Double = 0.01 // FIXME This is 1/n in Matlab code
   

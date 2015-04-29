@@ -117,6 +117,8 @@ object SolverUtils {
         val yStar = maxOracle(model, datapoint.pattern, datapoint.label)
         val w_s = phi(datapoint.pattern, datapoint.label) - phi(datapoint.pattern, yStar)
         println("#wsSize: "+w_s.size)
+        //TODO remove debug 
+       
         val ell_s = lossFn(datapoint.label, yStar)
 
         (w_s, ell_s)
