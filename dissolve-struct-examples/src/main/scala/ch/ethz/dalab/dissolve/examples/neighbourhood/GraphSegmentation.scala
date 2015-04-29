@@ -64,12 +64,6 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
       val pairwise = normalize(getPairwiseFeatureMap(yDat, xDat).toDenseVector) //TODO does this toDenseVector actually use proper columnIndex form, or atleast is it deterministic ? 
       assert((phi.size - unaryFeatureSize) == pairwise.size)
       phi((unaryFeatureSize) until phi.size) := pairwise
-      
-      //TODO remove this shiiiit
-      if (phi.size != 12864) {
-        println("#lookHere# pairwise.size=%d,xFeatures=%d,numClasses=%d,phi.size=%d".format(pairwise.size, xFeatures, numClasses, phi.size))
-        assert(false)
-      }
 
     }
 
