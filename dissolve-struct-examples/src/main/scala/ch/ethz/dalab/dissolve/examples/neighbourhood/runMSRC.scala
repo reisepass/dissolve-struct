@@ -79,6 +79,18 @@ object runMSRC {
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
 
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
+     
+    
+    //TODO remove this block
+      solverOptions.enableOracleCache = false
+      solverOptions.oracleCacheSize = 100
+      solverOptions.stoppingCriterion = RoundLimitCriterion
+      solverOptions.enableManualPartitionSize = true
+      solverOptions.NUM_PART = 1
+      solverOptions.doWeightedAveraging = false
+      solverOptions.debug = true
+      solverOptions.debugMultiplier = 1
+    
     
     /**
      * Some local overrides
