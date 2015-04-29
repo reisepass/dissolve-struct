@@ -58,6 +58,7 @@ object runMSRC {
     val solverOptions: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new SolverOptions()
     solverOptions.gitVersion = gitV
     solverOptions.runName = experimentName
+    solverOptions.startTime = System.currentTimeMillis
     solverOptions.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
     solverOptions.lambda = options.getOrElse("lambda", "0.01").toDouble
