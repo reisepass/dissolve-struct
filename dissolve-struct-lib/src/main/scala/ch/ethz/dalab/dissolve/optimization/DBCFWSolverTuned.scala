@@ -528,8 +528,8 @@ class DBCFWSolverTuned[X, Y](
           val thisModel = localModel
           val gamma_opt = (thisModel.getWeights().t * (w_i - w_s) - ((ell_i - ell_s) * (1.0 / lambda))) /
             ((w_i - w_s).t * (w_i - w_s) + eps)
-          if(solverOptions.debug){ //TODO idk if this should be ON without debug 
-            assert(gamma_opt > 0)
+          if(false){ //TODO //The gamma rule does not hold true if we are no doin excat reconstruction 
+             assert(gamma_opt > 0) 
             if( gamma_opt == 0 ){
               println("[WARNING] gamma_opt is zero, are you sure your oracleFn is not violating any assumptions ? ")
             }
