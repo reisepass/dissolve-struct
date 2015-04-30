@@ -31,9 +31,8 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
-  //TODO you need to make deefine a child object to GraphSegmentation which does pariwise disabled. Because changing the context of this variable is super unsafe and produces errors when using on spark
-  var DISABLE_PAIRWISE: Boolean = false //TODO this global is causing problems. It needs to be informed by the config file 
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+    
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
 
@@ -41,7 +40,7 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
   //Convert the graph into one big feature vector 
   def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
     assert(xDat.graphNodes.size == yDat.d.size)
-    //TODO remove, this is just for MSRC dataset debugging 
+    
 
     val xFeatures = xDat.getF(0).size
     val numClasses = yDat.numClasses
@@ -248,5 +247,4 @@ object GraphSegmentation extends DissolveFunctions[GraphStruct[Vector[Double], (
   def predictFn(model: StructSVMModel[xData, yLabels], xi: xData): yLabels = {
     return oracleFn(model, xi, yi = null)
   }
-
 }

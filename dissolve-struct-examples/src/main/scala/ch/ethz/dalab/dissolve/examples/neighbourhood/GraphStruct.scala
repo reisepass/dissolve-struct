@@ -195,11 +195,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   
 
     
-    println("")
-  //TODO remove, debug stuff 
-  val allConnSize = for( i <- 0 until nodeVect.size) yield{
-    nodeVect(i).connections.size
-  }
+
   
    
   (new GraphStruct(nodeVect,linkCoord,(xi.rows-1,xi.cols-1,0)), new GraphLabels(Vector(labelVect),numClasses))

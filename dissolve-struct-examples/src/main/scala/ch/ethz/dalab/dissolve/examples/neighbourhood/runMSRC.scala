@@ -66,7 +66,7 @@ object runMSRC {
     solverOptions.doLineSearch = options.getOrElse("linesearch", "true").toBoolean
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
     solverOptions.onlyUnary = options.getOrElse("onlyUnary", "false").toBoolean
-    GraphSegmentation.DISABLE_PAIRWISE = solverOptions.onlyUnary
+    //GraphSegmentation.DISABLE_PAIRWISE = solverOptions.onlyUnary
     
     solverOptions.sample = options.getOrElse("sample", "frac")
     solverOptions.sampleFrac = options.getOrElse("samplefrac", "0.5").toDouble
@@ -111,12 +111,12 @@ object runMSRC {
       new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
     }
     
-    //TODO chck if all X featuresa are same size 
+   
     val trainData = graphTrainD.toArray.toSeq
     val testData = graphTestD.toArray.toSeq
 
     //TODO remove this debug (this could be made into a testcase )
-    if(true){
+    if(false){
         val first = trainData(0).pattern.getF(0).size
       for ( i <- 0 until trainData.size){
         for(s <- 0 until trainData(i).pattern.size){
@@ -184,10 +184,11 @@ object runMSRC {
       else
         sc.parallelize(trainData)
 
+        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,
-        GraphSegmentation,
+        myGraphSegObj,
         solverOptions)
 
     val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = trainer.trainModel()
@@ -204,7 +205,7 @@ object runMSRC {
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"pred.bmp")
       }
-      avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
+      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1
     }
     avgTrainLoss = avgTrainLoss / trainData.size
@@ -221,7 +222,7 @@ object runMSRC {
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"predRW.bmp")
       }
-      avgTrainLoss += GraphSegmentation.lossFn(item.label, prediction)
+      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1
     }
     avgTrainLoss = avgTrainLoss / testData.size
