@@ -106,6 +106,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
 
   def decodeFn(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, debug: Boolean = false): yLabels = {
 
+    val t0 = System.currentTimeMillis()
     val model = new ItemizedModel
     val numRegions: Int = thetaUnary.rows
     assert(numRegions == graph.size)
@@ -141,7 +142,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
       }
     }
 
-    //  print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
+      print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
     val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
@@ -152,10 +153,12 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
     for (i <- 0 until out.size) {
       out(i) = assgn(labelParams(i)).intValue
     }
-
+    val t1 = System.currentTimeMillis()
+    print(" decodeTime=[%d s]".format(  (t1-t0)/1000  ))
     new GraphLabels(Vector(out), numClasses)
   }
 
+  var counter =0; //TODO REMOVE 
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
 
     val numClasses = model.numClasses
@@ -203,6 +206,14 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
     //TODO add if debug == true for this test
     if (yi != null) {
       print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis / 1000) + "s")
+    }
+    
+    //TODO remove
+    if(true){//printing out maxOracle to compare to OT 
+      val as3d = GraphUtils.reConstruct3dMat(decoded,xi.dataGraphLink,xi.maxCoord._1+1,xi.maxCoord._2+1,xi.maxCoord._3+1)
+      val as2d = GraphUtils.flatten3rdDim(as3d)
+      GraphUtils.printBMPfrom3dMat(as2d,"decode"+counter+"RW.bmp")
+      counter+=1
     }
 
     return decoded

@@ -23,13 +23,13 @@ import java.awt.image.DataBufferByte
 object ImageSegmentationUtils {
 
   // Size of super-pixels
-  val REGION_WIDTH = 10
-  val REGION_HEIGHT = 10
+  val REGION_WIDTH = 25
+  val REGION_HEIGHT = 25
 
   // The intensities are split into these many bins.
   // For example, in case of 4 bins, Bin 0 corresponds to intensities 0-63, bin 1 is 64-127,
   // bin 2 is 128-191, and bin 3 is 192-255.
-  val NUM_BINS = 8
+  val NUM_BINS = 3
 
   val featurizer_options: List[String] = List("HIST")
 

@@ -45,7 +45,7 @@ case class ROILabel(label: Int, numClasses: Int = 24, classFrequency: Double = 1
 object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]] with Serializable {
 
   val RUN_SYNTH = false
-  var DISABLE_PAIRWISE = true
+  var DISABLE_PAIRWISE = false
   //println("ImageSegmentationDemo::: ( DISABLE_PAIRWISE="+DISABLE_PAIRWISE+")")
   /**
    * Given:
@@ -261,8 +261,9 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
    * thetaUnary is of size r x K, where is the number of regions
    * thetaPairwise is of size K x K
    */
+  var counter =0; //TODO REMOVE 
   def decodeFn(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], imageWidth: Int, imageHeight: Int, debug: Boolean = false): DenseMatrix[ROILabel] = {
-
+ val t0 = System.currentTimeMillis()
     val numRegions: Int = thetaUnary.rows
     val numClasses: Int = thetaUnary.cols
 
@@ -359,6 +360,8 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
         imgMask(i, j) = ROILabel(assgn(image(i)(j)).intValue)
       }
     }
+     val t1 = System.currentTimeMillis()
+    print(" decodeTime=[%d s]".format(  (t1-t0)/1000  ))
 
     imgMask
   }
@@ -509,6 +512,10 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
     val decoded = decodeFn(thetaUnary, thetaPairwise, numCols, numRows, debug = false)
     val decodeTimeMillis = System.currentTimeMillis() - startTime
 
+        if(true){ //TODO remove 
+    ImageSegmentationUtils.printLabeledImage(decoded, "../data/debug/decode"+counter+"OT.bmp")
+    counter+=1
+    }
     decoded
   }
 
@@ -558,16 +565,16 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
      * Some local overrides
      */
     if (runLocally) {
-      solverOptions.sampleFrac = 0.2
+      //solverOptions.sampleFrac = 0.2
       solverOptions.enableOracleCache = false
       solverOptions.oracleCacheSize = 100
       solverOptions.stoppingCriterion = RoundLimitCriterion
-      solverOptions.roundLimit = 2
+      solverOptions.roundLimit = 10
       solverOptions.enableManualPartitionSize = true
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
 
-      solverOptions.debug = false
+      solverOptions.debug = true
       solverOptions.debugMultiplier = 1
     }
 

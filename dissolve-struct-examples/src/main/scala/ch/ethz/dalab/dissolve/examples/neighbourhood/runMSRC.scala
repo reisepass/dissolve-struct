@@ -86,14 +86,15 @@ object runMSRC {
      * Some local overrides
      */
     if (runLocally) {
-      solverOptions.sampleFrac = 1
+     // solverOptions.sampleFrac = 0.2
       solverOptions.enableOracleCache = false
       solverOptions.oracleCacheSize = 100
       solverOptions.stoppingCriterion = RoundLimitCriterion
-      solverOptions.roundLimit = 1
+      //solverOptions.roundLimit = 2
       solverOptions.enableManualPartitionSize = true
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
+      
       solverOptions.debug = true
       solverOptions.debugMultiplier = 1
     }
@@ -201,9 +202,9 @@ object runMSRC {
       
       if(printImages){
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"true.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"Train"+count+"true.bmp")
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"pred.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"Train"+count+"pred.bmp")
       }
       avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1
@@ -218,9 +219,9 @@ object runMSRC {
       
       if(printImages){
             GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"trueRW.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"imgTest"+count+"trueRW.bmp")
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"imgTest"+count+"predRW.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"imgTest"+count+"predRW.bmp")
       }
       avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1

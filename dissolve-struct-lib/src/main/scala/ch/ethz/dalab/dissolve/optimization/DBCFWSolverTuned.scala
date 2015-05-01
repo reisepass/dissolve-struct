@@ -241,7 +241,7 @@ class DBCFWSolverTuned[X, Y](
         .format(elapsedTime, roundNum, dualityGap, primal, dual, trainError, testError))
       
         
-        println("#RoundProgTag# %d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s"
+        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s"
         .format(solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
             dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f"  ))
         //TODO need to add expID tag, maybe git Version 
@@ -345,6 +345,8 @@ class DBCFWSolverTuned[X, Y](
               .values
               .collect()
 
+          //TODO remove, this print line is here to investigate the .reduceLeft empty error 
+          println("#d localSummaryList.size=%d".format(localSummaryList.size))
           val sumDeltaWeightsAndEll =
             localSummaryList
               .map {
