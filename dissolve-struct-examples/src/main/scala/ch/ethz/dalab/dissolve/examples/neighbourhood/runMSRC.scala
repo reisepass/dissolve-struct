@@ -95,8 +95,8 @@ object runMSRC {
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
       
-      solverOptions.debug = true
-      solverOptions.debugMultiplier = 1
+      //solverOptions.debug = true
+      //solverOptions.debugMultiplier = 1
     }
     solverOptions.numClasses = 24
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 

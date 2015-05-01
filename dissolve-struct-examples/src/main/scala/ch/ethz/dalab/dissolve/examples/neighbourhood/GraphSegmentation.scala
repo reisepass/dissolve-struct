@@ -209,7 +209,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
     }
     
     //TODO remove
-    if(true){//printing out maxOracle to compare to OT 
+    if(false){//printing out maxOracle to compare to OT 
       val as3d = GraphUtils.reConstruct3dMat(decoded,xi.dataGraphLink,xi.maxCoord._1+1,xi.maxCoord._2+1,xi.maxCoord._3+1)
       val as2d = GraphUtils.flatten3rdDim(as3d)
       GraphUtils.printBMPfrom3dMat(as2d,"decode"+counter+"RW.bmp")
