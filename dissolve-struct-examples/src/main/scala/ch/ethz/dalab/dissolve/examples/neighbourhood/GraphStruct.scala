@@ -190,13 +190,9 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
         nodeVect(key).connections++=coordNode.get((coords._1-1,coords._2,coords._3))
         nodeVect(key).connections++=coordNode.get((coords._1,coords._2-1,coords._3))
         nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3-1))
-      
     } }
   
 
-    
-
-  
    
   (new GraphStruct(nodeVect,linkCoord,(xi.rows-1,xi.cols-1,0)), new GraphLabels(Vector(labelVect),numClasses))
 }
@@ -231,7 +227,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   def graphFrom3dMat(dataIn: Array[Array[Array[Int]]],
                      labels: Array[Array[Array[Int]]],
                      featureFn: Array[Array[Array[Int]]] => Vector[Double],
-                     inSuperPixelDim: Vector[Int]): GraphStruct[Vector[Double], (Int, Int, Int)] = {
+                     inSuperPixelDim: Vector[Int]): (GraphStruct[Vector[Double], (Int, Int, Int)],GraphLabels) = {
 
     val xDim = dataIn.length
     val yDim = dataIn(0).length
@@ -289,13 +285,15 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     //val coordLink = new HashMap[(Int,Int,Int),Int]()
     val linkCoord = new HashMap[Int,(Int,Int,Int)]()
     val coordNode = new HashMap[(Int,Int,Int),Node[Vector[Double]]]()
+    val labelOut = new LinkedList[Int]()
     for{       supX <- 0 until numSupPixelPerX; supY <- 0 until numSupPixelPerY; supZ <- 0 until numSupPixelPerZ
     } {
       
        val supPixData = myCutSuperPix(supX*superPixSize(0), supY*superPixSize(1), supZ*superPixSize(2))
        val feats = featureFn(supPixData)
-       
-
+       val totalEleNum = superPixSize.reduceLeft( (a1,a2)=>a1*a2).toDouble
+       val supPixSum =supPixData.flatMap { x => x }.flatMap{x=>x}.toList.reduceLeft((a1,a2)=>a1+a2)/totalEleNum
+       labelOut.append(LinkedList(if(supPixSum>0.5) 1 else 0))//TODO this should be the most freq occuring label. So it generalizes to more than binary 
        val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Node[Vector[Double]]]())
        linkCoord.put(counter,(supX,supY,supZ))
        coordNode.put((supX,supY,supZ),nextNode)
@@ -304,7 +302,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     }
     
     
-    
+    val outLabelGraph = new GraphLabels(Vector(labelOut.toArray),2)
     val nodeVect = Vector(nodeList.toArray)
     
     linkCoord.keySet.foreach {  key => {
@@ -319,7 +317,107 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
       
     } }
     
+    
 
-   new GraphStruct[Vector[Double],(Int,Int,Int)](nodeVect,linkCoord,(xDim-1,yDim-1,zDim-1))
+   (new GraphStruct[Vector[Double],(Int,Int,Int)](nodeVect,linkCoord,(xDim-1,yDim-1,zDim-1)), outLabelGraph)
   }
+  
+  def boundGet[cont](x:Int,y:Int,z:Int,data:Array[Array[Array[cont]]]): Option[cont]={
+    if(x>=0 & y >=0 && z >= 0 && x<data.length&&y<data(0).length&&z<data(0)(0).length){
+     return Option(data(x)(y)(z))
+    }
+    else
+      return None
+  }
+
+  
+  //THIS DId not workout how i wanted it 
+  def genClusteredGraphData( canvasSize : Int,probUnifRandom: Double, featureNoise : Double, pairRandomItr: Int, numClasses:Int, neighbouringProb : Array[Array[Double]]){
+    var unaryData = Array.fill(canvasSize,canvasSize,1)(0)
+    for( x <- 0 until unaryData.length){
+      for (y <- 0 until unaryData(0).length){
+        for(z <- 0 until unaryData(0)(0).length){
+           unaryData(x)(y)(z) = (Math.random()*numClasses.toDouble).toInt%numClasses
+          
+          }
+        }
+      }
+    
+   var pairData = Array.fill(canvasSize,canvasSize,1)(0)
+     for ( idx <- 0 until pairRandomItr ){
+     for( x <- 0 until pairData.length){
+      for (y <- 0 until pairData(0).length){
+        for(z <- 0 until pairData(0)(0).length){
+               
+            val neigh = new LinkedList[Vector[Double]]()
+            //val self = theData(x)(y)(z)
+            var totalProbsPerNeighbouringLabel = Vector(Array.fill(numClasses)(0.0))
+            var xN=x; var yN = y ; var zN = z
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+             xN=x+1;  yN = y ;  zN = z
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+            xN=x;  yN = y+1 ;  zN = z
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+            xN=x;  yN = y ;  zN = z+1
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+            xN=x-1;  yN = y ;  zN = z
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+            xN=x;  yN = y-1 ;  zN = z
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+            xN=x;  yN = y ;  zN = z-1
+            if(xN>=0 && yN >=0 && zN >= 0 && xN<pairData.length&&yN<pairData(0).length&&zN<pairData(0)(0).length){
+              val other = unaryData(xN)(yN)(zN)
+              totalProbsPerNeighbouringLabel+=Vector(neighbouringProb(other))
+            }
+            
+            
+            
+            pairData(x)(y)(z)= randomLabelWithProb(totalProbsPerNeighbouringLabel.toArray)
+          }
+        }
+      }
+   
+   unaryData = pairData
+ //  println("-------------------------------------------------")
+   
+   }
+     println(unaryData.deep.mkString("\n"))
+    print("tst")
+  }
+  
+  def randomLabelWithProb (probs : Array[Double] ):Int={
+    val totalProbs = probs.toList.reduceLeft((a1,a2)=> a1+a2)
+    var randomVal = Math.random()*totalProbs
+    for( idx <- 0 until probs.length){ //this can purhaps be done faster with a map or something 
+      
+      randomVal -= probs(idx) 
+      if(randomVal<=0)
+        return idx
+    }
+    return probs.length-1
+  }
+  
+  
+
+  
+  
+  
 }

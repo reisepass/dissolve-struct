@@ -39,6 +39,12 @@ object runMSRC {
   }
   def runStuff(options: Map[String, String]) {
     //
+    //TODO Remove debug
+    //( canvasSize : Int,probUnifRandom: Double, featureNoise : Double, pairRandomItr: Int, numClasses:Int, neighbouringProb : Array[Array[Double]], classFeat:Array[Vector[Double]]){
+    val pairProb = Array( Array(0.9,0.5,0.0),Array(0.5,0.9,0.5),Array(0.0,0.5,0.9)) 
+    GraphUtils.genClusteredGraphData(10,0.5,0.5,100,3,pairProb)
+    val allNeighClass = (0 until 24).toList.combinations(2).mkString
+    print(allNeighClass)
     //
     
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
@@ -67,6 +73,7 @@ object runMSRC {
     solverOptions.debug = options.getOrElse("debug", "false").toBoolean
     solverOptions.onlyUnary = options.getOrElse("onlyUnary", "false").toBoolean
     //GraphSegmentation.DISABLE_PAIRWISE = solverOptions.onlyUnary
+    val MAX_DECODE_ITERATIONS:Int = options.getOrElse("maxDecodeItr",  (if(solverOptions.onlyUnary) 100 else 1000 ).toString ).toInt
     
     solverOptions.sample = options.getOrElse("sample", "frac")
     solverOptions.sampleFrac = options.getOrElse("samplefrac", "0.5").toDouble
@@ -185,7 +192,7 @@ object runMSRC {
       else
         sc.parallelize(trainData)
 
-        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary)
+        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,
@@ -202,9 +209,9 @@ object runMSRC {
       
       if(printImages){
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"Train"+count+"true.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"trueRW_"+solverOptions.runName+".bmp")
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"Train"+count+"pred.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"predRW_"+solverOptions.runName+".bmp")
       }
       avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1
@@ -219,9 +226,9 @@ object runMSRC {
       
       if(printImages){
             GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(item.label, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"imgTest"+count+"trueRW.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Test"+count+"trueRW_"+solverOptions.runName+".bmp")
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
-      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),solverOptions.runName+"imgTest"+count+"predRW.bmp")
+      item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Test"+count+"predRW_"+solverOptions.runName+".bmp")
       }
       avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1

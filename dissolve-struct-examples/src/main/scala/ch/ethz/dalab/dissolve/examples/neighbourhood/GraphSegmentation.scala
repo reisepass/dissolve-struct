@@ -31,7 +31,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -143,12 +143,10 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
     }
 
       print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
-    val maxIterations = if (DISABLE_PAIRWISE) 100 else 1000
+    val maxIterations = MAX_DECODE_ITERATIONS
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
-    val assgnMean = cc.factorie.infer.InferByMeanField.infer(labelParams, model)
     // Retrieve assigned labels from these pixels
-
     val out = Array.fill[Int](graph.size)(0)
     for (i <- 0 until out.size) {
       out(i) = assgn(labelParams(i)).intValue
@@ -200,7 +198,9 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean) extends DissolveFunctions
      * Parameter estimation
      */
     val startTime = System.currentTimeMillis()
-    val decoded = decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+   
+    val decoded =  decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+    
     val decodeTimeMillis = System.currentTimeMillis() - startTime
 
     //TODO add if debug == true for this test

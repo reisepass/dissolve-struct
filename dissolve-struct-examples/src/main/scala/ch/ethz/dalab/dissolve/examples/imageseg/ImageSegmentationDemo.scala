@@ -45,7 +45,7 @@ case class ROILabel(label: Int, numClasses: Int = 24, classFrequency: Double = 1
 object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]] with Serializable {
 
   val RUN_SYNTH = false
-  var DISABLE_PAIRWISE = false
+  var DISABLE_PAIRWISE = true
   //println("ImageSegmentationDemo::: ( DISABLE_PAIRWISE="+DISABLE_PAIRWISE+")")
   /**
    * Given:
@@ -512,7 +512,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
     val decoded = decodeFn(thetaUnary, thetaPairwise, numCols, numRows, debug = false)
     val decodeTimeMillis = System.currentTimeMillis() - startTime
 
-        if(true){ //TODO remove 
+        if(false){ //TODO remove 
     ImageSegmentationUtils.printLabeledImage(decoded, "../data/debug/decode"+counter+"OT.bmp")
     counter+=1
     }
@@ -539,7 +539,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
 
     val runLocally: Boolean = options.getOrElse("local", "true").toBoolean
 
-    DISABLE_PAIRWISE = options.getOrElse("onlyunaries", "false").toBoolean
+    DISABLE_PAIRWISE = options.getOrElse("onlyUnary", "false").toBoolean
 
     val solverOptions: SolverOptions[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]] = new SolverOptions()
     solverOptions.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
@@ -569,7 +569,7 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
       solverOptions.enableOracleCache = false
       solverOptions.oracleCacheSize = 100
       solverOptions.stoppingCriterion = RoundLimitCriterion
-      solverOptions.roundLimit = 10
+      solverOptions.roundLimit = 25
       solverOptions.enableManualPartitionSize = true
       solverOptions.NUM_PART = 1
       solverOptions.doWeightedAveraging = false
@@ -648,8 +648,8 @@ object ImageSegmentationDemo extends DissolveFunctions[DenseMatrix[ROIFeature], 
           rawTrueMat(x)(y) = l.label
       }
 
-      GraphUtils.printBMPfrom3dMat(rawTrueMat, "imgTest" + count + "trueOT.bmp")
-      GraphUtils.printBMPfrom3dMat(rawPredMat, "imgTest" + count + "predOT.bmp")
+      GraphUtils.printBMPfrom3dMat(rawTrueMat, "Test" + count + "trueOT.bmp")
+      GraphUtils.printBMPfrom3dMat(rawPredMat, "Test" + count + "predOT.bmp")
       count += 1
       avgTestLoss += lossFn(item.label, prediction)
     }
