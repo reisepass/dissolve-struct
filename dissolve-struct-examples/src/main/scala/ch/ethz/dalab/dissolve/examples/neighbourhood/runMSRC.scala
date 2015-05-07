@@ -41,12 +41,10 @@ object runMSRC {
     //
     //TODO Remove debug
     //( canvasSize : Int,probUnifRandom: Double, featureNoise : Double, pairRandomItr: Int, numClasses:Int, neighbouringProb : Array[Array[Double]], classFeat:Array[Vector[Double]]){
-    val pairProb = Array( Array(0.9,0.5,0.0),Array(0.5,0.9,0.5),Array(0.0,0.5,0.9)) 
-    GraphUtils.genClusteredGraphData(10,0.5,0.5,100,3,pairProb)
-    val allNeighClass = (0 until 24).toList.combinations(2).mkString
-    print(allNeighClass)
+
     //
     
+
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
     val runLocally: Boolean = options.getOrElse("local", "false").toBoolean
@@ -86,6 +84,11 @@ object runMSRC {
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
 
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
+    solverOptions.dataGenSparsity = options.getOrElse("dataGenSparsity","-1").toDouble
+    solverOptions.dataAddedNoise = options.getOrElse("dataAddedNoise","-1").toDouble
+    solverOptions.numClasses = options.getOrElse("numClasses","24").toInt //TODO this only makes sense if you end up with the MSRC dataset 
+    if(solverOptions.dataGenSparsity> 0)
+      solverOptions.dataWasGenerated=true
     
     
     
@@ -105,9 +108,11 @@ object runMSRC {
       //solverOptions.debug = true
       //solverOptions.debugMultiplier = 1
     }
-    solverOptions.numClasses = 24
+    
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
 
+    
+    /*
     val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
 
     val graphTrainD = for (i <- 0 until oldtrainData.size) yield {
@@ -122,7 +127,13 @@ object runMSRC {
    
     val trainData = graphTrainD.toArray.toSeq
     val testData = graphTestD.toArray.toSeq
+    */
+   // solverOptions.numClasses = 24
+    
+    val trainData = GraphUtils.genSquareBlobs(20,40,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
+    val testData = GraphUtils.genSquareBlobs(50,40,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
 
+    
     //TODO remove this debug (this could be made into a testcase )
     if(false){
         val first = trainData(0).pattern.getF(0).size
@@ -135,6 +146,7 @@ object runMSRC {
       println("#Fun all is well")
     
     }
+    /*
     if(false){
     val compAll = for ( i <- 0 until 10) yield{
     val first = trainData(i)
@@ -164,6 +176,7 @@ object runMSRC {
     tmp
     }
     }
+    */
       
     //
 
@@ -180,6 +193,10 @@ object runMSRC {
 
     println(SolverUtils.getSparkConfString(sc.getConf))
 
+    
+    
+    
+    
     solverOptions.testDataRDD =
       if (solverOptions.enableManualPartitionSize)
         Some(sc.parallelize(trainData, solverOptions.NUM_PART))

@@ -47,6 +47,11 @@ class SolverOptions[X, Y] extends Serializable {
 
   // In case of multi-class
   var numClasses = -1
+  
+  //Synthetic Data Generator 
+  var dataWasGenerated = false
+  var dataGenSparsity = 0.0
+  var dataAddedNoise = 0.0
 
   // Cache params
   var enableOracleCache: Boolean = false

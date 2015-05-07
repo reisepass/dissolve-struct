@@ -64,7 +64,7 @@ case class Node[Features](
 }
 
 
-case class GraphLabels ( d:Vector[Int],numClasses:Int){
+case class GraphLabels ( d:Vector[Int],numClasses:Int)extends Serializable {
   assert(numClasses>0)
   def isInverseOf(other: GraphLabels): Boolean = {
     if(other.d.size !=d.size)
@@ -294,6 +294,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
        val totalEleNum = superPixSize.reduceLeft( (a1,a2)=>a1*a2).toDouble
        val supPixSum =supPixData.flatMap { x => x }.flatMap{x=>x}.toList.reduceLeft((a1,a2)=>a1+a2)/totalEleNum
        labelOut.append(LinkedList(if(supPixSum>0.5) 1 else 0))//TODO this should be the most freq occuring label. So it generalizes to more than binary 
+      //TODO there is a bug in this append statment
        val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Node[Vector[Double]]]())
        linkCoord.put(counter,(supX,supY,supZ))
        coordNode.put((supX,supY,supZ),nextNode)
@@ -415,6 +416,86 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     return probs.length-1
   }
   
+  
+  def anotherDataGenFn (canvasSize:Int,portionBackground:Double,numClasses:Int, featureNoise:Double):(GraphStruct[Vector[Double], (Int, Int, Int)],GraphLabels) ={
+    //Gen random mat of 10x10 
+      //Force it to be mostly zeros by rounding down after 0.8
+      //Per 1 that still exists choose one of the non zero classes to replace it with
+    //Generate a much larger 100x100 where each pixel of original mat represents 10x10 pixes of that value
+    //Add Random noise 
+    //Generate a graph with excisting functions and make the superpixel size 5x5 
+    assert(canvasSize%4==0)
+    val random = new java.security.SecureRandom           
+    val topLvl = Array.fill(canvasSize/4,canvasSize/4){ if(random.nextDouble()<portionBackground) 0 else 1}
+    val scaled = DenseMatrix.zeros[Int](canvasSize,canvasSize)
+    
+    //Lets go directly to a graph
+    for( x <-0 until canvasSize/4){
+      for(y <-0 until canvasSize/4){
+        if(topLvl(x)(y)!=0){
+          val curClass = random.nextInt(numClasses-1)+1
+          scaled(x*4 to x*4+3,y*4 to y*4+3):=curClass
+        }
+      }
+    }
+    
+    def featureFn(label:Int):Vector[Double]={
+      val outF=Array.fill(numClasses){random.nextDouble()*featureNoise}
+      outF(label)+=1
+      Vector(outF)
+    }
+    
+    val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]
+    var counter =0;
+    //val coordLink = new HashMap[(Int,Int,Int),Int]()
+    val linkCoord = new HashMap[Int,(Int,Int,Int)]()
+    val coordNode = new HashMap[(Int,Int,Int),Node[Vector[Double]]]()
+    val labelOut =  new ListBuffer[Int]
+    for{       supX <- 0 until canvasSize; supY <- 0 until canvasSize
+    } {
+      
+       val feats = featureFn(scaled(supX,supY))
+
+       labelOut++=LinkedList(scaled(supX,supY))
+       val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Node[Vector[Double]]]())
+       linkCoord.put(counter,(supX,supY,0))
+       coordNode.put((supX,supY,0),nextNode)
+       nodeList += nextNode
+       counter  += 1
+    }
+    
+        
+    val outLabelGraph = new GraphLabels(Vector(labelOut.toArray),numClasses)
+    val nodeVect = Vector(nodeList.toArray)
+    
+    /*
+    linkCoord.keySet.foreach {  key => {
+        val coords = linkCoord.get(key).get
+        nodeVect(key).connections++=coordNode.get((coords._1+1,coords._2,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2+1,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3+1))
+        nodeVect(key).connections++=coordNode.get((coords._1-1,coords._2,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2-1,coords._3))
+        nodeVect(key).connections++=coordNode.get((coords._1,coords._2,coords._3-1))
+        
+      
+    } }
+    */
+    
+
+   (new GraphStruct[Vector[Double],(Int,Int,Int)](nodeVect,linkCoord,(canvasSize-1,canvasSize-1,0)), outLabelGraph)
+ 
+  
+  }
+  
+  
+  def genSquareBlobs( howMany:Int,anvasSize:Int,portionBackground:Double,numClasses:Int, featureNoise:Double ):Seq[LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels]]={
+    val out = for( i <- 0 until howMany) yield{
+      val (xGraph,yList) = anotherDataGenFn(anvasSize,portionBackground,numClasses, featureNoise)
+         new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](yList,xGraph)
+    }
+    out
+  }
   
 
   
