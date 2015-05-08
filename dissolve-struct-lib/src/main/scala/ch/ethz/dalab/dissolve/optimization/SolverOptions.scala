@@ -52,6 +52,10 @@ class SolverOptions[X, Y] extends Serializable {
   var dataWasGenerated = false
   var dataGenSparsity = 0.0
   var dataAddedNoise = 0.0
+  var dataNoiseOnlyTest = false
+  var dataGenTestSize = 30
+  var dataGenTrainSize = 30
+  var dataGenCanvasSize=16
   
   //Which decode func 
   var useMF=false

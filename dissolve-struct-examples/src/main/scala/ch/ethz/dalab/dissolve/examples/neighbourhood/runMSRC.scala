@@ -88,6 +88,10 @@ object runMSRC {
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
     solverOptions.dataGenSparsity = options.getOrElse("dataGenSparsity","-1").toDouble
     solverOptions.dataAddedNoise = options.getOrElse("dataAddedNoise","-1").toDouble
+    solverOptions.dataNoiseOnlyTest = options.getOrElse("dataNoiseOnlyTest","false").toBoolean
+    solverOptions.dataGenTrainSize = options.getOrElse("dataGenTrainSize","40").toInt
+    solverOptions.dataGenTestSize = options.getOrElse("dataGenTestSize",solverOptions.dataGenTrainSize.toString).toInt
+    solverOptions.dataGenCanvasSize = options.getOrElse("dataGenCanvasSize","16").toInt
     solverOptions.numClasses = options.getOrElse("numClasses","24").toInt //TODO this only makes sense if you end up with the MSRC dataset 
     if(solverOptions.dataGenSparsity> 0)
       solverOptions.dataWasGenerated=true
@@ -132,8 +136,8 @@ object runMSRC {
     */
    // solverOptions.numClasses = 24
     
-    val trainData = GraphUtils.genSquareBlobs(40,16,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
-    val testData = GraphUtils.genSquareBlobs(20,16,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
+    val trainData = GraphUtils.genSquareBlobs(solverOptions.dataGenTrainSize,solverOptions.dataGenCanvasSize,solverOptions.dataGenSparsity,solverOptions.numClasses, if(solverOptions.dataNoiseOnlyTest) 0.0 else solverOptions.dataAddedNoise).toArray.toSeq
+    val testData = GraphUtils.genSquareBlobs(solverOptions.dataGenTestSize,solverOptions.dataGenCanvasSize,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
 
     
     //TODO remove this debug (this could be made into a testcase )
@@ -218,8 +222,9 @@ object runMSRC {
         myGraphSegObj,
         solverOptions)
 
+    val t0MTrain = System.currentTimeMillis()
     val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = trainer.trainModel()
-
+    val t1MTrain = System.currentTimeMillis()
     var avgTrainLoss = 0.0
 
     var count=0
@@ -238,7 +243,7 @@ object runMSRC {
     avgTrainLoss = avgTrainLoss / trainData.size
     println("\nTRAINING: Avg Loss : " + avgTrainLoss + " numItems " + trainData.size)
     //Test Error 
-    avgTrainLoss = 0.0
+    var avgTestLoss = 0.0
     count=0
     for (item <- testData) {
       val prediction = model.predict(item.pattern)
@@ -249,11 +254,16 @@ object runMSRC {
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Test"+count+"predRW_"+solverOptions.runName+".bmp")
       }
-      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)
+      avgTestLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1
     }
-    avgTrainLoss = avgTrainLoss / testData.size
-    println("\nTest Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
+    avgTestLoss = avgTestLoss / testData.size
+    println("\nTest Avg Loss : " + avgTestLoss + " numItems " + testData.size)
+    
+    println("#EndScore#,%d,%s,%s,%d,%.3f,%.3f,%s,%d,%d,%.3f,%s,%d,%d,%s,%s,%d,%s,%f,%f".format(
+        solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,(t1MTrain-t0MTrain),solverOptions.dataGenSparsity,solverOptions.dataAddedNoise,if(solverOptions.dataNoiseOnlyTest)"t"else"f",solverOptions.dataGenTrainSize,solverOptions.dataGenCanvasSize,solverOptions.learningRate,if(solverOptions.useMF)"t"else"f",solverOptions.numClasses,MAX_DECODE_ITERATIONS,if(solverOptions.onlyUnary)"t"else"f",if(solverOptions.debug)"t"else"f",solverOptions.roundLimit,if(solverOptions.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss    ) )
+        
+  
     sc.stop()
 
   }

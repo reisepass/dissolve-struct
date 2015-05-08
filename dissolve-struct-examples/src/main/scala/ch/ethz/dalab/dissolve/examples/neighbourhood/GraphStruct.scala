@@ -272,14 +272,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     }
     
     
-    
-    
 
-    
- 
-    
-  
-    
     val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]
     var counter =0;
     //val coordLink = new HashMap[(Int,Int,Int),Int]()
