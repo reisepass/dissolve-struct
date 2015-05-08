@@ -31,7 +31,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -75,7 +75,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val pairwiseMat = DenseMatrix.zeros[Double](yi.numClasses, yi.numClasses)
     for (idx <- 0 until xi.size) {
       val myLabel = yi.d(idx)
-      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour.idx)) += 1 } }
+      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour)) += 1 } }
     }
     pairwiseMat
   }
@@ -131,9 +131,9 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
         graph.getC(idx).foreach { neighbour =>
           {
-            if (!nodePairsUsed.contains((idx, neighbour.idx)) && !nodePairsUsed.contains((neighbour.idx, idx))) { //This prevents adding neighbours twice 
-              nodePairsUsed.add((idx, neighbour.idx))
-              model ++= new Factor2(labelParams(idx), labelParams(neighbour.idx)) {
+            if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
+              nodePairsUsed.add((idx, neighbour))
+              model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
                 def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)
               }
             }
@@ -199,13 +199,17 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
      */
     val startTime = System.currentTimeMillis()
    
-    val decoded =  decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+    val decoded =   if(USE_MF){
+      MeanFieldTest.decodeFn_AL(thetaUnary,thetaPairwise,graph=xi,learningRate = MF_LEARNING_RATE, maxIterations  = MAX_DECODE_ITERATIONS)}
+    else{
+      decodeFn(thetaUnary, thetaPairwise, xi, debug = false)}
+    
     
     val decodeTimeMillis = System.currentTimeMillis() - startTime
 
     //TODO add if debug == true for this test
     if (yi != null) {
-      print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis / 1000) + "s")
+      print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis ) + "ms")
     }
     
     //TODO remove

@@ -52,6 +52,10 @@ class SolverOptions[X, Y] extends Serializable {
   var dataWasGenerated = false
   var dataGenSparsity = 0.0
   var dataAddedNoise = 0.0
+  
+  //Which decode func 
+  var useMF=false
+  var learningRate = 0.1
 
   // Cache params
   var enableOracleCache: Boolean = false

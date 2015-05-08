@@ -47,7 +47,7 @@ class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
 //TODO Add?? mapping from original xyz to nodes. For prediction we need something like this but it could be more efficient to just have a print out method that returns a xyz matrix 
   def getF(i:Int): Features ={graphNodes(i).features}
   def get(i:Int): Node[Features] = { graphNodes(i)}
-  def getC(i:Int): scala.collection.mutable.Set[Node[Features]] = { graphNodes(i).connections}
+  def getC(i:Int): scala.collection.mutable.Set[Int] = { graphNodes(i).connections}
   def size = graphNodes.size
    
 }
@@ -55,7 +55,7 @@ class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
 case class Node[Features](
   val idx: Int,
   val features: Features,
-  val connections: scala.collection.mutable.Set[Node[Features]]) extends Serializable {
+  val connections: scala.collection.mutable.Set[Int]) extends Serializable {
   override def hashCode() : Int={
     idx
   }
@@ -165,13 +165,13 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]
   val labelVect = Array.fill(xi.rows*xi.cols)(0)
    val linkCoord = new HashMap[Int,(Int,Int,Int)]()
-    val coordNode = new HashMap[(Int,Int,Int),Node[Vector[Double]]]()
+    val coordNode = new HashMap[(Int,Int,Int),Int]()
   for( rIdx <- 0 until xi.rows){
     for( cIdx <- 0 until xi.cols){
       val myIDX = ImageSegmentationDemo.columnMajorIdx(rIdx,cIdx,xi.rows)
-      val nextNode = new Node[Vector[Double]](myIDX,xi(rIdx,cIdx).feature,new HashSet[Node[Vector[Double]]]())
+      val nextNode = new Node[Vector[Double]](myIDX,xi(rIdx,cIdx).feature,new HashSet[Int]())
       linkCoord.put(myIDX,(rIdx,cIdx,0))
-      coordNode.put((rIdx,cIdx,0),nextNode)
+      coordNode.put((rIdx,cIdx,0),nextNode.idx)
       labelVect(myIDX)=yi(rIdx,cIdx).label
       nodeList += nextNode
     }
@@ -284,7 +284,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     var counter =0;
     //val coordLink = new HashMap[(Int,Int,Int),Int]()
     val linkCoord = new HashMap[Int,(Int,Int,Int)]()
-    val coordNode = new HashMap[(Int,Int,Int),Node[Vector[Double]]]()
+    val coordNode = new HashMap[(Int,Int,Int),Int]()
     val labelOut = new LinkedList[Int]()
     for{       supX <- 0 until numSupPixelPerX; supY <- 0 until numSupPixelPerY; supZ <- 0 until numSupPixelPerZ
     } {
@@ -295,9 +295,9 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
        val supPixSum =supPixData.flatMap { x => x }.flatMap{x=>x}.toList.reduceLeft((a1,a2)=>a1+a2)/totalEleNum
        labelOut.append(LinkedList(if(supPixSum>0.5) 1 else 0))//TODO this should be the most freq occuring label. So it generalizes to more than binary 
       //TODO there is a bug in this append statment
-       val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Node[Vector[Double]]]())
+       val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Int]())
        linkCoord.put(counter,(supX,supY,supZ))
-       coordNode.put((supX,supY,supZ),nextNode)
+       coordNode.put((supX,supY,supZ),nextNode.idx)
        nodeList +=nextNode
        counter+=1
     }
@@ -440,8 +440,14 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     }
     
     def featureFn(label:Int):Vector[Double]={
-      val outF=Array.fill(numClasses){random.nextDouble()*featureNoise}
-      outF(label)+=1
+      val outF:Array[Double] =if( random.nextDouble()>featureNoise){
+      val tmp = Array.fill[Double](numClasses){random.nextDouble()}
+      tmp(label)=1.0
+      tmp
+      }
+      else{
+        Array.fill(numClasses){random.nextDouble()}
+      }
       Vector(outF)
     }
     
@@ -449,7 +455,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     var counter =0;
     //val coordLink = new HashMap[(Int,Int,Int),Int]()
     val linkCoord = new HashMap[Int,(Int,Int,Int)]()
-    val coordNode = new HashMap[(Int,Int,Int),Node[Vector[Double]]]()
+    val coordNode = new HashMap[(Int,Int,Int),Int]()
     val labelOut =  new ListBuffer[Int]
     for{       supX <- 0 until canvasSize; supY <- 0 until canvasSize
     } {
@@ -457,9 +463,9 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
        val feats = featureFn(scaled(supX,supY))
 
        labelOut++=LinkedList(scaled(supX,supY))
-       val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Node[Vector[Double]]]())
+       val nextNode = new Node[Vector[Double]](counter,feats,new HashSet[Int]())
        linkCoord.put(counter,(supX,supY,0))
-       coordNode.put((supX,supY,0),nextNode)
+       coordNode.put((supX,supY,0),nextNode.idx)
        nodeList += nextNode
        counter  += 1
     }
@@ -468,7 +474,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     val outLabelGraph = new GraphLabels(Vector(labelOut.toArray),numClasses)
     val nodeVect = Vector(nodeList.toArray)
     
-    /*
+    
     linkCoord.keySet.foreach {  key => {
         val coords = linkCoord.get(key).get
         nodeVect(key).connections++=coordNode.get((coords._1+1,coords._2,coords._3))
@@ -480,7 +486,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
         
       
     } }
-    */
+    
     
 
    (new GraphStruct[Vector[Double],(Int,Int,Int)](nodeVect,linkCoord,(canvasSize-1,canvasSize-1,0)), outLabelGraph)

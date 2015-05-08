@@ -83,6 +83,8 @@ object runMSRC {
     solverOptions.enableOracleCache = options.getOrElse("enableoracle", "false").toBoolean
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
 
+    solverOptions.useMF=options.getOrElse("useMF","false").toBoolean
+    solverOptions.learningRate = options.getOrElse("learningRate","0.1").toDouble
     solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
     solverOptions.dataGenSparsity = options.getOrElse("dataGenSparsity","-1").toDouble
     solverOptions.dataAddedNoise = options.getOrElse("dataAddedNoise","-1").toDouble
@@ -130,8 +132,8 @@ object runMSRC {
     */
    // solverOptions.numClasses = 24
     
-    val trainData = GraphUtils.genSquareBlobs(20,40,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
-    val testData = GraphUtils.genSquareBlobs(50,40,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
+    val trainData = GraphUtils.genSquareBlobs(40,16,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
+    val testData = GraphUtils.genSquareBlobs(20,16,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise).toArray.toSeq
 
     
     //TODO remove this debug (this could be made into a testcase )
@@ -209,7 +211,7 @@ object runMSRC {
       else
         sc.parallelize(trainData)
 
-        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS)
+        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS,solverOptions.learningRate ,solverOptions.useMF)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,
@@ -234,7 +236,7 @@ object runMSRC {
       count+=1
     }
     avgTrainLoss = avgTrainLoss / trainData.size
-    println("\nTRAINING: Avg Loss : " + avgTrainLoss + " numItems " + testData.size)
+    println("\nTRAINING: Avg Loss : " + avgTrainLoss + " numItems " + trainData.size)
     //Test Error 
     avgTrainLoss = 0.0
     count=0
