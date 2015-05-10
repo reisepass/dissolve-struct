@@ -56,6 +56,7 @@ class SolverOptions[X, Y] extends Serializable {
   var dataGenTestSize = 30
   var dataGenTrainSize = 30
   var dataGenCanvasSize=16
+  var dataRandSeed= (-1)
   
   //Which decode func 
   var useMF=false
