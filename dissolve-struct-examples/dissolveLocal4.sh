@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EXP_NAME=LocalMF_parSpace_3
+EXP_NAME=LocalMF_fix_parspace
 logOut=${EXP_NAME}.log
 csvOut=${EXP_NAME}.csv
 

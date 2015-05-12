@@ -58,9 +58,13 @@ class SolverOptions[X, Y] extends Serializable {
   var dataGenCanvasSize=16
   var dataRandSeed= (-1)
   
+  var useMSRC = false
+  var useNaiveUnaryMax = false
+  
   //Which decode func 
   var useMF=false
   var learningRate = 0.1
+  var mfTemp = 5.0
 
   // Cache params
   var enableOracleCache: Boolean = false

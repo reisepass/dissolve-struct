@@ -31,7 +31,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -57,7 +57,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       unary(startIdx until endIdx) := xDat.getF(idx) + unary(startIdx until endIdx)
     }
 
-    phi(0 until (unaryFeatureSize)) := unary
+    phi(0 until (unaryFeatureSize)) := (unary)
 
     if (!DISABLE_PAIRWISE) {
       val pairwise = normalize(getPairwiseFeatureMap(yDat, xDat).toDenseVector) //TODO does this toDenseVector actually use proper columnIndex form, or atleast is it deterministic ? 
@@ -66,7 +66,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
     }
 
-    phi
+   phi
   }
 
   // Count pairwise occurances of classes. This is normalized on the outside 
@@ -175,6 +175,8 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
     val phi_Y: DenseMatrix[Double] = xFeatureStack(xi) // Retrieves a f x r matrix representation of the original image, i.e, each column is the feature vector that region r
     val thetaUnary = phi_Y.t * unaryWeights // Returns a r x K matrix, where theta(r, k) is the unary potential of region r having label k
+    //Aureliens code calls this Unary potential (without the loss, but its ok) 
+    
     //TODO check if this transpose makes sense 
 
     val thetaPairwise = pairwiseWeights
@@ -194,22 +196,31 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
     }
 
+    
+    
     /**
      * Parameter estimation
      */
     val startTime = System.currentTimeMillis()
    
+    
+    
     val decoded =   if(USE_MF){
-      MeanFieldTest.decodeFn_AL(thetaUnary,thetaPairwise,graph=xi,learningRate = MF_LEARNING_RATE, maxIterations  = MAX_DECODE_ITERATIONS)}
+      MeanFieldTest.decodeFn_AR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS,temp=MF_TEMP)}
+    else if(USE_NAIV_UNARY_MAX){
+      NaiveUnaryMax.decodeFn(thetaUnary)
+    }
     else{
       decodeFn(thetaUnary, thetaPairwise, xi, debug = false)}
+    
+    
     
     
     val decodeTimeMillis = System.currentTimeMillis() - startTime
 
     //TODO add if debug == true for this test
     if (yi != null) {
-      print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis ) + "ms")
+    //  print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis ) + "ms")
     }
     
     //TODO remove

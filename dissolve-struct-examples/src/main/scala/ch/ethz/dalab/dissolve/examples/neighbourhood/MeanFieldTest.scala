@@ -117,5 +117,56 @@ object MeanFieldTest {
     print("[MF decodeTime=[%d s] ]".format(  (t1-t0)/1000  ))
     return ( new GraphLabels(outLab,numClasses))
   }
+   def decodeFn_AR(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, maxIterations:Int=100, debug: Boolean = false, temp:Double=5): GraphLabels = {
+    val thetaMin = min(thetaPairwise.toArray)
+    val thetaMax = max(thetaPairwise)
+   // val probTheta = (thetaPairwise-thetaMin)/(thetaMax-thetaMin) //TODO conforming theta to be a probability like this is pretty bad. I dont think we can solve a non probabiltiy with mean field 
+    
+    val t0 = System.currentTimeMillis()
+
+    val numRegions: Int = thetaUnary.rows
+    assert(numRegions == graph.size)
+    val numClasses: Int = thetaUnary.cols
+    
+    
+    val Q = DenseMatrix.ones[Double](numRegions, numClasses) //TODO maybe initialize to 1/num neighbours or 1/numneighbours*numClass
+    //TODO This Q could be stored in a spark RDD if it gets too large for memory;; Prob not necesary because thetaUnayr is the same size 
+    //TODO consider storing the probabilities in a byte
+    
+
+    
+    for (iter <- 0 until maxIterations) {
+      for (xi <- 0 until graph.size) {
+        val tI =  System.currentTimeMillis()
+        for( xiLab <- 0 until numClasses){
+          
+          val neigh = graph.getC(xi).toArray
+          val allClasses = (0 until numClasses).toList
+          val newQest = neigh.toList.map { neighIdx =>
+            allClasses.foldLeft(0.0) { (running, curClass) =>
+              {
+                running +  Math.exp(Q(neighIdx, curClass)*thetaPairwise(curClass, xiLab)) * Math.exp((1/temp)*thetaUnary(xi, xiLab))
+              }
+            }
+          }.sum
+
+          Q(xi,xiLab)=(1/temp)*newQest     
+        }
+        val tII =  System.currentTimeMillis()
+       //print("<X=[%d ms] >".format(  (tII-tI)  ))
+
+      }
+    }
+    val outLab = Vector(Array.fill(numRegions)(0))
+    for (row <- 0 until Q.rows) {
+      outLab(row)=argmax(Q(row,::))
+    }
+   
+    val t1 = System.currentTimeMillis()
+   // print("[MF decodeTime=[%d s] ]".format(  (t1-t0)/1000  ))
+    return ( new GraphLabels(outLab,numClasses))
+  }
+
+
 
 }

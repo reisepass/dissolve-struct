@@ -112,26 +112,31 @@ object SolverUtils {
     val n: Int = dataSize.toInt
     val d: Int = model.getWeights().size
 
-    var (w_s, ell_s) = data.map {
+    val (w_s_orig, ell_s_orig) = data.map {
       case datapoint =>
         val yStar = maxOracle(model, datapoint.pattern, datapoint.label)
         val w_s = phi(datapoint.pattern, datapoint.label) - phi(datapoint.pattern, yStar)
-        println("#wsSize: "+w_s.size)
-        //TODO remove debug 
+       
        
         val ell_s = lossFn(datapoint.label, yStar)
-
+        if(ell_s >1)
+          println("loss greater than 1 ??")
+          
         (w_s, ell_s)
     }.fold((Vector.zeros[Double](d), 0.0)) {
       case ((w_acc, ell_acc), (w_i, ell_i)) =>
         (w_acc + w_i, ell_acc + ell_i)
     }
-
-    w_s = w_s / (lambda * n)
-    ell_s = ell_s / n
+   // val oldell_s=ell_s
+    val w_s = w_s_orig / (lambda * n)
+    val ell_s = ell_s_orig / n
 
     val gap: Double = w.t * (w - w_s) * lambda - ell + ell_s
-
+    if(gap<0){
+      val size = data.map{case datapoint => 1}.fold(0){case(last, a)=>(last+a)}
+      
+      println("gap can never be negative")
+    }
     (gap, w_s, ell_s)
   }
 

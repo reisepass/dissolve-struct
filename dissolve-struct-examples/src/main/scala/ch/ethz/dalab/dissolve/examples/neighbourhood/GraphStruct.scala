@@ -441,7 +441,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
       else{
         Array.fill(numClasses){random.nextDouble()}
       }
-      Vector(outF)
+      normalize(Vector(outF))
     }
     
     val nodeList = new scala.collection.mutable.ListBuffer[Node[Vector[Double]]]

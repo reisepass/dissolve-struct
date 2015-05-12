@@ -33,6 +33,7 @@ class DBCFWSolverTuned[X, Y](
   val miniBatchEnabled: Boolean = false) extends Serializable {
 
   /**
+   * 
    * Some case classes to make code more readable
    */
 
@@ -240,12 +241,16 @@ class DBCFWSolverTuned[X, Y](
       println("[%.3f] Round = %d, Gap = %f, Primal = %f, Dual = %f, TrainLoss = %f, TestLoss = %f"
         .format(elapsedTime, roundNum, dualityGap, primal, dual, trainError, testError))
       
+        if(dualityGap<0)
+          //assert(dualityGap>0)
         
         println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s"
         .format(solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
             dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f"  ))
         //TODO need to add expID tag, maybe git Version 
         
+        
+    
         
       RoundEvaluation(roundNum, elapsedTime, primal, dual, dualityGap, trainError, testError)
     }
@@ -346,7 +351,7 @@ class DBCFWSolverTuned[X, Y](
               .collect()
 
           //TODO remove, this print line is here to investigate the .reduceLeft empty error 
-          println("#d localSummaryList.size=%d".format(localSummaryList.size))
+          // println("#d localSummaryList.size=%d".format(localSummaryList.size))
           val sumDeltaWeightsAndEll =
             localSummaryList
               .map {
@@ -530,6 +535,8 @@ class DBCFWSolverTuned[X, Y](
           val thisModel = localModel
           val gamma_opt = (thisModel.getWeights().t * (w_i - w_s) - ((ell_i - ell_s) * (1.0 / lambda))) /
             ((w_i - w_s).t * (w_i - w_s) + eps)
+            if(gamma_opt < 0)
+               println("[WARNING] gamma_opt < 0 ")
           if(false){ //TODO //The gamma rule does not hold true if we are no doin excat reconstruction 
              assert(gamma_opt > 0) 
             if( gamma_opt == 0 ){
