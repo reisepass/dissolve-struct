@@ -118,8 +118,7 @@ object MeanFieldTest {
     return ( new GraphLabels(outLab,numClasses))
   }
    def decodeFn_AR(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, maxIterations:Int=100, debug: Boolean = false, temp:Double=5): GraphLabels = {
-    val thetaMin = min(thetaPairwise.toArray)
-    val thetaMax = max(thetaPairwise)
+   val DISABLE_PAIRWISE = if(thetaPairwise.size==0) true else false 
    // val probTheta = (thetaPairwise-thetaMin)/(thetaMax-thetaMin) //TODO conforming theta to be a probability like this is pretty bad. I dont think we can solve a non probabiltiy with mean field 
     
     val t0 = System.currentTimeMillis()
@@ -142,10 +141,11 @@ object MeanFieldTest {
           
           val neigh = graph.getC(xi).toArray
           val allClasses = (0 until numClasses).toList
+          
           val newQest = neigh.toList.map { neighIdx =>
             allClasses.foldLeft(0.0) { (running, curClass) =>
               {
-                running +  Math.exp(Q(neighIdx, curClass)*thetaPairwise(curClass, xiLab)) * Math.exp((1/temp)*thetaUnary(xi, xiLab))
+                running +  Math.exp(Q(neighIdx, curClass)*(if(DISABLE_PAIRWISE)0 else thetaPairwise(curClass, xiLab))) * Math.exp((1/temp)*thetaUnary(xi, xiLab))
               }
             }
           }.sum

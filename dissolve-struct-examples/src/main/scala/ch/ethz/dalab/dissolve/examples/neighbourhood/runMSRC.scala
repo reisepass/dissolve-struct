@@ -146,6 +146,12 @@ object runMSRC {
    
     val (trainData,testData) = if(solverOptions.useMSRC) getMSRC() else genSquareNoiseD()
    
+    for( i <- 0 until 10){
+      val pat = trainData(i).pattern
+      val primMat = GraphUtils.flatten3rdDim(GraphUtils.reConstruct3dMat(  trainData(i).label, pat.dataGraphLink,16,16,1))
+      println(primMat.deep.mkString("\n"))
+      println("------------------------------------------------")
+    }
     
     if(solverOptions.useMSRC) solverOptions.numClasses = 24
     

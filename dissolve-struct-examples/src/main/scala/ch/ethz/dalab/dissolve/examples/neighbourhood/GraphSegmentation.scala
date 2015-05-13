@@ -57,7 +57,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       unary(startIdx until endIdx) := xDat.getF(idx) + unary(startIdx until endIdx)
     }
 
-    phi(0 until (unaryFeatureSize)) := (unary)
+    phi(0 until (unaryFeatureSize)) := unary
 
     if (!DISABLE_PAIRWISE) {
       val pairwise = normalize(getPairwiseFeatureMap(yDat, xDat).toDenseVector) //TODO does this toDenseVector actually use proper columnIndex form, or atleast is it deterministic ? 
@@ -70,6 +70,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
   }
 
   // Count pairwise occurances of classes. This is normalized on the outside 
+  //TODO why do we recount this every round. cant we just cache it somewhere
   def getPairwiseFeatureMap(yi: yLabels, xi: xData): DenseMatrix[Double] = {
 
     val pairwiseMat = DenseMatrix.zeros[Double](yi.numClasses, yi.numClasses)
@@ -265,9 +266,9 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       } else {
         val pairwiseFeatureVec = weightVec(endIdx until weightVec.size).toDenseVector
         assert(pairwiseFeatureVec.size == numClasses * numClasses)
-        pairwiseFeatureVec.toDenseMatrix.reshape(numClasses, numClasses)
+        pairwiseFeatureVec.toDenseMatrix.reshape(numClasses, numClasses)//TODO does this actually recover properly
       }
-
+     assert((unaryPot.size+pairwisePot.size)==weightVec.length)
     (unaryPot, pairwisePot)
   }
 

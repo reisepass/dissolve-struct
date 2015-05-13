@@ -241,7 +241,9 @@ class DBCFWSolverTuned[X, Y](
       println("[%.3f] Round = %d, Gap = %f, Primal = %f, Dual = %f, TrainLoss = %f, TestLoss = %f"
         .format(elapsedTime, roundNum, dualityGap, primal, dual, trainError, testError))
       
-        if(dualityGap<0)
+        if(dualityGap<0){
+          println("# Neg Gap after "+gammaZeroInARow+"gamma < 0");
+        }
           //assert(dualityGap>0)
         
         println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s"
@@ -430,6 +432,7 @@ class DBCFWSolverTuned[X, Y](
     (globalModel, debugSb.toString())
   }
 
+  var gammaZeroInARow = 0;
   def mapper(partitionInfo: (Int, Int), // (partitionIdx, numPartitions)
              dataIterator: Iterator[(Index, InputDataShard[X, Y])],
              helperFunctions: HelperFunctions[X, Y],
@@ -524,7 +527,7 @@ class DBCFWSolverTuned[X, Y](
       val updatedCache = yAndCache._2
 
       // 3) Define the update quantities
-      val psi_i: Vector[Double] = phi(pattern, label) - phi(pattern, ystar_i)
+      val psi_i: Vector[Double] = phi(pattern, label) - phi(pattern, ystar_i) 
       val w_s: Vector[Double] = psi_i :* (1.0 / (n * lambda))
       val loss_i: Double = lossFn(label, ystar_i)
       val ell_s: Double = (1.0 / n) * loss_i
@@ -535,8 +538,13 @@ class DBCFWSolverTuned[X, Y](
           val thisModel = localModel
           val gamma_opt = (thisModel.getWeights().t * (w_i - w_s) - ((ell_i - ell_s) * (1.0 / lambda))) /
             ((w_i - w_s).t * (w_i - w_s) + eps)
-            if(gamma_opt < 0)
-               println("[WARNING] gamma_opt < 0 ")
+            if(gamma_opt < 0){
+               println("[WARNING] gamma_opt < 0 try["+gammaZeroInARow+" of "+n+"]")//TODO remove this statment only works in local mode 
+               gammaZeroInARow+=1
+            }
+            else{
+              gammaZeroInARow=0
+            }
           if(false){ //TODO //The gamma rule does not hold true if we are no doin excat reconstruction 
              assert(gamma_opt > 0) 
             if( gamma_opt == 0 ){

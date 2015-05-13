@@ -410,7 +410,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   }
   
   
-  def anotherDataGenFn (canvasSize:Int,portionBackground:Double,numClasses:Int, featureNoise:Double, randSeed:Int):(GraphStruct[Vector[Double], (Int, Int, Int)],GraphLabels) ={
+  def anotherDataGenFn (canvasSize:Int,portionBackground:Double,numClasses:Int, featureNoise:Double, random:java.util.Random):(GraphStruct[Vector[Double], (Int, Int, Int)],GraphLabels) ={
     //Gen random mat of 10x10 
       //Force it to be mostly zeros by rounding down after 0.8
       //Per 1 that still exists choose one of the non zero classes to replace it with
@@ -418,7 +418,7 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
     //Add Random noise 
     //Generate a graph with excisting functions and make the superpixel size 5x5 
     assert(canvasSize%4==0)
-    val random = if(randSeed!=(-1)) new java.util.Random(randSeed) else new java.util.Random()          
+             
     val topLvl = Array.fill(canvasSize/4,canvasSize/4){ if(random.nextDouble()<portionBackground) 0 else 1}
     val scaled = DenseMatrix.zeros[Int](canvasSize,canvasSize)
     
@@ -489,8 +489,10 @@ def convertOT_msrc_toGraph ( xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILab
   
   
   def genSquareBlobs( howMany:Int,anvasSize:Int,portionBackground:Double,numClasses:Int, featureNoise:Double , randSeed:Int):Seq[LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels]]={
+     val random = if(randSeed!=(-1)) new java.util.Random(randSeed) else new java.util.Random()
     val out = for( i <- 0 until howMany) yield{
-      val (xGraph,yList) = anotherDataGenFn(anvasSize,portionBackground,numClasses, featureNoise, randSeed)
+      
+      val (xGraph,yList) = anotherDataGenFn(anvasSize,portionBackground,numClasses, featureNoise, random)
          new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](yList,xGraph)
     }
     out
