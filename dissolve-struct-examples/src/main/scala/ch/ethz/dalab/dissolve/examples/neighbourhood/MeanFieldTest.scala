@@ -308,4 +308,5 @@ object MeanFieldTest {
     return (new GraphLabels(outLab, numClasses))
   }
 
+  
 }
