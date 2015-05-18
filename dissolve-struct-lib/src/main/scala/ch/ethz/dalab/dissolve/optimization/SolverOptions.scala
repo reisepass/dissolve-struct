@@ -26,6 +26,7 @@ class SolverOptions[X, Y] extends Serializable {
   var doWeightedAveraging: Boolean = false
 
   var randSeed: Int = 42
+  var dbcfwSeed: Int = -1;
   /**
    *  BCFW - "uniform", "perm" or "iter"
    *  DBCFW - "count", "frac"

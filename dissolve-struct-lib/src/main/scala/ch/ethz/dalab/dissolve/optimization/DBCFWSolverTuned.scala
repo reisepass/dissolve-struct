@@ -295,16 +295,26 @@ class DBCFWSolverTuned[X, Y](
           /**
            * Step 1 - Create a joint RDD containing all information of idx -> (data, primals, cache)
            */
-          val indexedJointData: RDD[(Index, InputDataShard[X, Y])] =
+          
+          val indexedJointData: RDD[(Index, InputDataShard[X, Y])] = if(solverOptions.dbcfwSeed==(-1) )
             indexedTrainDataRDD
-              .sample(solverOptions.sampleWithReplacement, sampleFrac)
+              .sample(solverOptions.sampleWithReplacement, sampleFrac)   
               .join(indexedPrimalsRDD)
               .leftOuterJoin(indexedCacheRDD)
               .mapValues { // Because mapValues preserves partitioning
                 case ((labeledObject, primalInfo), cache) =>
                   InputDataShard(labeledObject, primalInfo, cache)
               }
-
+          else
+indexedTrainDataRDD
+              .sample(solverOptions.sampleWithReplacement, sampleFrac,solverOptions.dbcfwSeed)  
+              .join(indexedPrimalsRDD)
+              .leftOuterJoin(indexedCacheRDD)
+              .mapValues { // Because mapValues preserves partitioning
+                case ((labeledObject, primalInfo), cache) =>
+                  InputDataShard(labeledObject, primalInfo, cache)
+              }
+          
           /*println("indexedTrainDataRDD = " + indexedTrainDataRDD.count())
           println("indexedJointData.count = " + indexedJointData.count())
           println("indexedPrimalsRDD.count = " + indexedPrimalsRDD.count())

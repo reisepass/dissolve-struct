@@ -158,8 +158,9 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
   }
 
   var counter =0; //TODO REMOVE 
+  var lastHash:Int=0;
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
-
+    val thisyiHash= if(yi!=null) yi.hashCode else 0
     val numClasses = model.numClasses
 
     val numDims = xi.getF(0).length
@@ -206,8 +207,22 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
    
     
     
+    //TODO REMOVE DEBUG 
+    
+    /*
+    val t1_1 =System.currentTimeMillis();
+    val deco1 = MeanFieldTest.decodeFn_AR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+    val t1_2 =System.currentTimeMillis();
+    val t2_1 =System.currentTimeMillis();
+    val deco2 = MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+    val t2_2 =System.currentTimeMillis();
+    println("#MF_time:"+(t1_2-t1_1)+" MF_parTime:"+(t2_2-t2_1)+(if(deco1.equals(deco2))"and ARE SAME"else"and ARE DIF"));
+    */
+    
+    
     val decoded =   if(USE_MF){
-      MeanFieldTest.decodeFn_AR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS,temp=MF_TEMP)}
+    
+      MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())}
     else if(USE_NAIV_UNARY_MAX){
       NaiveUnaryMax.decodeFn(thetaUnary)
     }
@@ -231,7 +246,8 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       GraphUtils.printBMPfrom3dMat(as2d,"decode"+counter+"RW.bmp")
       counter+=1
     }
-
+counter+=1
+lastHash=thisyiHash
     return decoded
 
   }
