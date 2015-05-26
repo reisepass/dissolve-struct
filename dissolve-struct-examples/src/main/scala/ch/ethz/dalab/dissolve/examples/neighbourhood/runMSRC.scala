@@ -72,7 +72,7 @@ object runMSRC {
     solverOptions.onlyUnary = options.getOrElse("onlyUnary", "false").toBoolean
     //GraphSegmentation.DISABLE_PAIRWISE = solverOptions.onlyUnary
     val MAX_DECODE_ITERATIONS:Int = options.getOrElse("maxDecodeItr",  (if(solverOptions.onlyUnary) 100 else 1000 ).toString ).toInt
-    
+    val MAX_DECODE_ITERATIONS_MF_ALT:Int = options.getOrElse("maxDecodeItrMF",  (MAX_DECODE_ITERATIONS).toString ).toInt
     solverOptions.sample = options.getOrElse("sample", "frac")
     solverOptions.sampleFrac = options.getOrElse("samplefrac", "1").toDouble
     solverOptions.dbcfwSeed = options.getOrElse("dbcfwSeed","-1").toInt
@@ -98,6 +98,9 @@ object runMSRC {
     solverOptions.dataRandSeed = options.getOrElse("dataRandSeed","-1").toInt
     solverOptions.dataGenCanvasSize = options.getOrElse("dataGenCanvasSize","16").toInt
     solverOptions.numClasses = options.getOrElse("numClasses","24").toInt //TODO this only makes sense if you end up with the MSRC dataset 
+    
+    val DEBUG_COMPARE_MF_FACTORIE =  options.getOrElse("cmpEnergy","false").toBoolean
+    
     if(solverOptions.dataGenSparsity> 0)
       solverOptions.dataWasGenerated=true
     
@@ -236,7 +239,9 @@ object runMSRC {
       else
         sc.parallelize(trainData)
 
-        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS,solverOptions.learningRate ,solverOptions.useMF,solverOptions.mfTemp,solverOptions.useNaiveUnaryMax)
+        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS,
+            solverOptions.learningRate ,solverOptions.useMF,solverOptions.mfTemp,solverOptions.useNaiveUnaryMax,
+            DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,solverOptions.runName)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,

@@ -31,7 +31,7 @@ import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName") extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -143,7 +143,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       }
     }
 
-      print("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
+     // println("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
     val maxIterations = MAX_DECODE_ITERATIONS
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
@@ -153,7 +153,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       out(i) = assgn(labelParams(i)).intValue
     }
     val t1 = System.currentTimeMillis()
-    print(" decodeTime=[%d s]".format(  (t1-t0)/1000  ))
+    //print(" decodeTime=[%d s]".format(  (t1-t0)/1000  ))
     new GraphLabels(Vector(out), numClasses)
   }
 
@@ -221,15 +221,27 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     
     
     val decoded =   if(USE_MF){
-    
-      MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())}
+      MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+      }
     else if(USE_NAIV_UNARY_MAX){
       NaiveUnaryMax.decodeFn(thetaUnary)
     }
     else{
-      decodeFn(thetaUnary, thetaPairwise, xi, debug = false)}
+      decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+      }
     
+    if(DEBUG_COMPARE_MF_FACTORIE){
+      val factorieDecode = decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+      val mfDecode =  MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+      val naiveDecode =  NaiveUnaryMax.decodeFn(thetaUnary)
+      
+      val halfEfact  = halfEnergyOf(factorieDecode,thetaUnary,thetaPairwise,xi)
+      val halfEmf = halfEnergyOf(mfDecode,thetaUnary,thetaPairwise,xi)
+      val halfEnaive = halfEnergyOf(naiveDecode,thetaUnary,thetaPairwise,xi)
+      println("#DecEngCmp#,%d,%d,%.5f,%.5f,%.5f,%d,%s".format( (if(yi!=null) thisyiHash else -1 ),System.currentTimeMillis(),halfEfact,halfEmf,halfEnaive,MAX_DECODE_ITERATIONS,EXP_NAME))
     
+    }
+   
     
     
     val decodeTimeMillis = System.currentTimeMillis() - startTime
@@ -252,6 +264,18 @@ lastHash=thisyiHash
 
   }
 
+  def halfEnergyOf(y:yLabels,thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData ):Double = {
+    
+    var outE =0.0
+    for ( xidx <- 0 until graph.size){ //TODO turn this into a for yield. For more idiomatic scala. (But does it matter ? ) 
+      val curLab=y.d(xidx)
+      val unarTMP = thetaUnary(xidx,curLab)
+      val pairTMP = graph.getC(xidx).map { neighIDX => thetaPairwise(curLab,y.d(neighIDX)) }.sum
+      outE+=unarTMP+pairTMP
+    }
+    outE
+  }
+  
   def unpackWeightVec(weightVec: Vector[Double], xFeatureSize: Int, numClasses: Int = 24, padded: Boolean = false): (DenseMatrix[Double], DenseMatrix[Double]) = {
     // Unary features
     val startIdx = 0
