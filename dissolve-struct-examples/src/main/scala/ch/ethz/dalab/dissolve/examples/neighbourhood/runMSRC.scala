@@ -32,6 +32,11 @@ import scala.util.matching.Regex
 import java.io.File
 import scala.collection.mutable.HashMap
 import java.util.concurrent.atomic.AtomicInteger
+import scala.pickling.Defaults._
+import scala.pickling.binary._
+import scala.pickling.static._
+import scala.io.Source
+import java.io._
 
  
 object runMSRC {
@@ -91,11 +96,32 @@ object runMSRC {
     //TODO free this memory after saving 
   }
 
-  def genMSRCsupPix():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]])={
   
+  def writeObjectToFile(filename: String, obj: AnyRef) = { // obj must have serialiazable trait
+import java.io._
+val fos = new FileOutputStream(filename)
+val oos = new ObjectOutputStream(fos)
+oos.writeObject(obj)
+oos.close()
+}
   
-      val rawImgDir = "../data/generated/MSRC_ObjCategImageDatabase_v2/Images" //TODO this should not be hardcoded
-      val groundTruthDir = "../data/generated/MSRC_ObjCategImageDatabase_v2/GroundTruth" //TODO this should not be hardcoded  
+  def readObjectFromFile[T](filename: String): T = {
+import java.io._
+val fis = new FileInputStream(filename)
+val ois = new ObjectInputStream(fis)
+val obj = ois.readObject()
+ois.close()
+obj.asInstanceOf[T]
+}
+
+
+  
+  def genMSRCsupPix( numClasses : Int):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]])={
+  
+  //MSRC_ObjCategImageDatabase_v2
+    //msrcSubsetsy
+      val rawImgDir = "../data/generated/msrcSubset/Images" //TODO this should not be hardcoded
+      val groundTruthDir = "../data/generated/msrcSubset/GroundTruth" //TODO this should not be hardcoded  
     val lostofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp"))).get
 
 
@@ -103,6 +129,23 @@ object runMSRC {
         val fName = lostofBMP(fI)
         val nameNoExt = fName.substring(0,fName.length()-4)
         val rawImagePath =  rawImgDir+"/"+ fName
+        
+        val graphCachePath = rawImgDir+"/"+ nameNoExt +".graph"
+        val maskpath = rawImgDir+"/"+ nameNoExt +".mask"
+        val groundCachePath = groundTruthDir+"/"+ nameNoExt +".ground"
+        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +".labels"
+        
+        val cacheMaskF = new File(maskpath)
+        val cacheGraphF = new File(graphCachePath)
+        val cahceLabelsF =  new File(outLabelsPath)
+        val cacheGraph = new File(rawImgDir+"/"+ nameNoExt +".mask")
+        if(cacheGraphF.exists() && cahceLabelsF.exists()){//Check if its cached 
+          
+          val outLabels = readObjectFromFile[GraphLabels](outLabelsPath)
+          val outGraph = readObjectFromFile[GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)]](graphCachePath)
+           new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
+        } 
+        else{
         val opener = new Opener();
         val img = opener.openImage(rawImagePath);
         val aStack = img.getStack
@@ -123,8 +166,14 @@ object runMSRC {
         val normFn = (a: (Int, Int, Int), n: Int)             => ((a._1 / n, a._2 / n, a._3 / n))
 
         val allGr = new SLIC[(Int, Int, Int)](distFn, sumFn, normFn, copyImage, 30, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)
-        val mask = allGr.calcSuperPixels()
-
+        
+        val mask = if( cacheMaskF.exists()) readObjectFromFile[Array[Array[Array[Int]]]](maskpath) else allGr.calcSuperPixels
+        printSuperPixels(mask, img, 300, "_mask")//TODO remove this 
+        if(!cacheMaskF.exists())
+          writeObjectToFile(maskpath,mask)//save a chace 
+       
+        
+        
         val histBinsPerCol = 3
         val histWidt = 255 / histBinsPerCol
         val featureFn = (data: List[DatumCord[(Int, Int, Int)]]) => {
@@ -165,7 +214,7 @@ object runMSRC {
     
     //val linkCords = cordWiseBlobs.map( a=> { a._1->a._2.map(daCord => { (daCord.x,daCord.y,daCord.z)}) })
     val outGraph = new GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)](Vector(outNodes.toArray),new HashMap[Int,(Int,Int,Int)],(xDim-1,yDim-1,zDim-1)) //TODO change the linkCord in graphStruct so it makes sense 
-    
+    writeObjectToFile(graphCachePath,outGraph)
      //Construct Ground Truth 
         val groundTruthpath =  groundTruthDir+"/"+ nameNoExt+"_GT.bmp"
         val openerGT = new Opener();
@@ -187,35 +236,41 @@ object runMSRC {
           
           val curLabelCount =HashMap[Int,Int]()
           cordD.foreach( datum => {
-              val v = gtStack.getVoxel(datum.x,datum.y,datum.z)
+              val v = gtStack.getVoxel(datum.x,datum.y,datum.z).asInstanceOf[Int]
               
-          val r = gtColMod.getRed(v).asInstanceOf[Int]
-          val g = gtColMod.getGreen(v).asInstanceOf[Int]
-          val b = gtColMod.getBlue(v).asInstanceOf[Int]
-          if(!(r==0&b==0&g==0)){ //Black is uninformative so we dont use it for anything 
+          val r = gtColMod.getRed(v)
+          val g = gtColMod.getGreen(v)
+          val b = gtColMod.getBlue(v)
+          
           if(!colorToLabelMap.contains((r,g,b)))
             colorToLabelMap.put((r,g,b),labelCount.getAndIncrement)
-          }
+          
           val myCo = colorToLabelMap.get((r,g,b)).get
           val old = curLabelCount.getOrElse(myCo,0)
           curLabelCount.put(myCo,old+1)
+          
             
           })
           val mostUsedLabel= curLabelCount.maxBy(_._2)._1
           groundTruthMap.put(pixID,mostUsedLabel)
         }
         
-        val numLabels = labelCount.get
+        writeObjectToFile(groundCachePath,groundTruthMap)
+        
+        
         val labelsInOrder = (0 until groundTruthMap.size).map(a=>groundTruthMap.get(a).get)
-        val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numLabels)
+        val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numClasses)
         
-        
-        
+        writeObjectToFile(outLabelsPath,outLabels)
+       
          new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
-    }
+        }
+        }
       
+      val what= allData.size
       val (training,test) = allData.splitAt(allData.size/2)
-      
+      val w1 = training.size
+      val w3 = test.size
       return (training,test) 
    }
   
@@ -351,14 +406,20 @@ object runMSRC {
     
     
 
-    val (trainData,testData) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) genMSRCsupPix() else genSquareNoiseD()
+    val (trainData,testData) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {solverOptions.numClasses = 25; genMSRCsupPix(25) }else genSquareNoiseD()
    
+    
+    
+    
+    /*
     for( i <- 0 until 10){
       val pat = trainData(i).pattern
       val primMat = GraphUtils.flatten3rdDim(GraphUtils.reConstruct3dMat(  trainData(i).label, pat.dataGraphLink,solverOptions.dataGenCanvasSize,solverOptions.dataGenCanvasSize,1))
       println(primMat.deep.mkString("\n"))
       println("------------------------------------------------")
     }
+    * 
+    */
     
     if(solverOptions.useMSRC) solverOptions.numClasses = 24
     
