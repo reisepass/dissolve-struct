@@ -60,6 +60,8 @@ class SolverOptions[X, Y] extends Serializable {
   var dataRandSeed= (-1)
   
   var useMSRC = false
+  var generateMSRCSupPix = false
+  var squareSLICoption=false
   var useNaiveUnaryMax = false
   
   //Which decode func 
