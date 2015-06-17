@@ -251,13 +251,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     //  print(if (decoded.isInverseOf(yi)) "[IsInv]" else "[NotInv]" + "Decoding took : " + Math.round(decodeTimeMillis ) + "ms")
     }
     
-    //TODO remove
-    if(false){//printing out maxOracle to compare to OT 
-      val as3d = GraphUtils.reConstruct3dMat(decoded,xi.dataGraphLink,xi.maxCoord._1+1,xi.maxCoord._2+1,xi.maxCoord._3+1)
-      val as2d = GraphUtils.flatten3rdDim(as3d)
-      GraphUtils.printBMPfrom3dMat(as2d,"decode"+counter+"RW.bmp")
-      counter+=1
-    }
+    
 counter+=1
 lastHash=thisyiHash
     return decoded
