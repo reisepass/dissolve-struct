@@ -35,6 +35,8 @@ import scala.collection.mutable.ArrayBuffer
 import java.awt.geom.AffineTransform
 import ch.ethz.dalab.dissolve.examples.imageseg.ImageSegmentationUtils
 import java.util.concurrent.atomic.AtomicInteger
+import java.awt.Color
+import ij.io.Opener
 
 class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
                                            originalDataMappingFilePath: String) extends Serializable { //dataLink could be a Vector, no reason for hashMap
@@ -131,7 +133,7 @@ object GraphUtils {
     out
   }
 
-  def printBMPFromGraph(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non") {
+  def printBMPFromGraph(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non",colorMap:Map[Int,(Int,Int,Int)]=null) {
 
     
     val mask = readObjectFromFile[Array[Array[Array[Int]]]](graph.originMapFile)
@@ -145,8 +147,12 @@ object GraphUtils {
     for (x <- 0 until xDim; y <- 0 until yDim) {
       val sID = mask(x)(y)(slice3dAt)
       val myClassPred = labels.d(sID)
-      val myCol = someColors(myClassPred%someColors.length)
+      val myCol = if(colorMap==null) someColors(myClassPred%someColors.length) else{
+        val rgb = colorMap.get(myClassPred).get
+        new Color(rgb._1,rgb._2,rgb._3).getRGB()
+      }
       img.setRGB(x,y,myCol)
+      
     }
      ImageIO.write(img, "BMP", new File("../data/debug/" + name+".bmp")); //TODO change this output location
   }
@@ -216,20 +222,27 @@ object GraphUtils {
     obj.asInstanceOf[T]
   }
   
-  def lossPerPixel(superPixelMapping:String, originalTrue:String, prediction:GraphLabels,lossFn :(Int,Int)=>Double = (a:Int,b:Int)=>{if(a==b) 0.0 else 1.0} ):Double={
+  def lossPerPixel(superPixelMapping:String, originalTrue:String, prediction:GraphLabels,lossFn :(Int,Int)=>Double = (a:Int,b:Int)=>{if(a==b) 0.0 else 1.0} , colorMap:Map[(Int,Int,Int),Int]):Double={
     assert(!originalTrue.equals("None"))
     val supPixToOrig = readObjectFromFile[Array[Array[Array[Int]]]](superPixelMapping)
-    val origTrueLabel = readObjectFromFile[Array[Array[Array[Int]]]](originalTrue)
+    
+      val openerGT = new Opener();
+        val imgGT = openerGT.openImage(originalTrue);
+        val gtStack = imgGT.getStack
+        val gtColMod= gtStack.getColorModel
+        
     
     val xDim = supPixToOrig.length
     val yDim = supPixToOrig(0).length
     val zDim = supPixToOrig(0)(0).length
-    assert(xDim == origTrueLabel.length)
-    assert(yDim == origTrueLabel(0).length)
-    assert(zDim == origTrueLabel(0)(0).length)
-    
+assert(xDim==gtStack.getWidth)
+        assert(yDim==gtStack.getHeight)
+        assert(zDim==gtStack.getSize)
+        
     val eachLoss= for( x <- 0 until xDim ; y<- 0 until yDim ; z <- 0 until zDim) yield{
-      val trueLabel = origTrueLabel(x)(y)(z)
+      val trueLabelColor = gtStack.getVoxel(x,y,z)
+      val trueRGB = (gtColMod.getRed(trueLabelColor.asInstanceOf[Int]),gtColMod.getGreen(trueLabelColor.asInstanceOf[Int]),gtColMod.getBlue(trueLabelColor.asInstanceOf[Int]))
+      val trueLabel = colorMap.get(trueRGB).get
       val requiredSuperPixelID  = supPixToOrig(x)(y)(z)
       val predictedLabel = prediction.d(requiredSuperPixelID)
       lossFn(trueLabel,predictedLabel)

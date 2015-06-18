@@ -43,6 +43,15 @@ object ImageSegmentationUtils {
     }
     .toMap
     
+      val colormapRGB: Map[(Int, Int, Int), Int] = Source.fromURL(getClass.getResource(colormapFile))
+    .getLines()
+    .map { line => line.split(" ") }
+    .map {
+      case Array(label, value, r, g, b, className) =>
+        (r.toInt,g.toInt,g.toInt)-> label.toInt
+    }.toMap
+    
+    
     val colormapRev: Map[Int, Int] = Source.fromURL(getClass.getResource(colormapFile))
     .getLines()
     .map { line => line.split(" ") }

@@ -92,7 +92,7 @@ object runMSRC {
     }
     imp2_pix.setStack(aStack_supPix)
     //imp2_pix.show()
-    IJ.saveAs(imp2_pix, "bmp", "/home/mort/workspace/Scala-SLIC-Superpixel/ScalaSLIC/data/image" + label + ".bmp"); //TODO this should not be hardcoded 
+    IJ.saveAs(imp2_pix, "bmp", "/home/mort/workspace/Scala-SLIC-Superpixel/ScalaSLIC/data/" + label + "_seg.bmp"); //TODO this should not be hardcoded 
     //TODO free this memory after saving 
   }
 
@@ -100,20 +100,25 @@ object runMSRC {
   
 
   
-  def genMSRCsupPix( numClasses : Int, runName:String = "_", isSquare:Boolean=false,splitTraining:Boolean=true):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]])={
+  def genMSRCsupPix( numClasses : Int, runName:String = "_", isSquare:Boolean=false,splitTraining:Boolean=true,S:Int, imageDataSource:String="../data/generated/msrcSub2/Images", groundTruthDataSource:String = "../data/generated/msrcSub2/GroundTruth"):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int,Int,Int),Int])={
   
   //MSRC_ObjCategImageDatabase_v2
     //msrcSubsetsy
-      val rawImgDir = "../data/generated/MSRC_ObjCategImageDatabase_v2/Images" //TODO this should not be hardcoded
-      val groundTruthDir = "../data/generated/MSRC_ObjCategImageDatabase_v2/GroundTruth" //TODO this should not be hardcoded  
-    val lostofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp"))).get
+      val rawImgDir =  imageDataSource  
+      val groundTruthDir = groundTruthDataSource  
+       val lostofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp"))).get
+       val superType = if(isSquare) "_square_" else "_SLIC_"
 
-
+         val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping"
+         val colorMapF = new File(colorMapPath)
+       val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[(Int,Int,Int),Int]](colorMapPath)  else  new HashMap[(Int,Int,Int),Int]()
+       
+       
        val allData = for( fI <- 0 until lostofBMP.size) yield {
         val fName = lostofBMP(fI)
         val nameNoExt = fName.substring(0,fName.length()-4)
         val rawImagePath =  rawImgDir+"/"+ fName
-        val superType = if(isSquare) "_square_" else "_SLIC_"
+        
         val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+"_" +runName+".graph"
         val maskpath = rawImgDir+"/"+ nameNoExt +superType+ "_" +runName+".mask"
         val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+"_" +runName+".ground"
@@ -132,6 +137,7 @@ object runMSRC {
         } 
         else{
         println("No cache found for "+nameNoExt+" computing now..")
+        val tStartPre = System.currentTimeMillis()
         val opener = new Opener();
         val img = opener.openImage(rawImagePath);
         val aStack = img.getStack
@@ -151,8 +157,9 @@ object runMSRC {
         val sumFn =  (a: (Int, Int, Int), b: (Int, Int, Int)) => ((a._1 + b._1, a._2 + b._2, a._3 + a._3))
         val normFn = (a: (Int, Int, Int), n: Int)             => ((a._1 / n, a._2 / n, a._3 / n))
 
-        val allGr = new SLIC[(Int, Int, Int)](distFn, sumFn, normFn, copyImage, 30, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)
+        val allGr = new SLIC[(Int, Int, Int)](distFn, sumFn, normFn, copyImage, S, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)
         
+        val tMask = System.currentTimeMillis()
         val mask = if( cacheMaskF.exists())  {
           GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](maskpath) 
         } else {
@@ -161,8 +168,9 @@ object runMSRC {
           else
             allGr.calcSuperPixels 
           }
+        println("Calculate SuperPixels time: "+(System.currentTimeMillis()-tMask))
         
-        //printSuperPixels(mask, img, 300, nameNoExt+superType+"_mask")//TODO remove this 
+       // printSuperPixels(mask, img, 300, nameNoExt+superType+"_mask")//TODO remove this 
         if(!cacheMaskF.exists())
            GraphUtils.writeObjectToFile(maskpath,mask)//save a chace 
        
@@ -186,16 +194,31 @@ object runMSRC {
         }
         
         
+        val tFindCenter = System.currentTimeMillis()
          val (supPixCenter, supPixSize) = allGr.findSupPixelCenterOfMassAndSize(mask)
+         println( "Find Center mass time: "+(System.currentTimeMillis()-tFindCenter))
+         val tEdges = System.currentTimeMillis()
     val edgeMap = allGr.findEdges_simple(mask, supPixCenter)
-    val (cordWiseBlobs, supPixEdgeCount) = allGr.findSupPixelBounds(mask)
+    println("Find Graph Connections time: "+(System.currentTimeMillis()-tEdges))
+    val tSupBound = System.currentTimeMillis()
+   // val (cordWiseBlobs, supPixEdgeCount) = allGr.findSupPixelBounds(mask)
+    println ("Group Pixel by Superpixel id: "+(System.currentTimeMillis()-tSupBound))
+    val tSupBound_I =System.currentTimeMillis()
+    val cordWiseBlobs = allGr.findSupPixelBounds_I(mask)
+    println ("Group Pixel by Superpixel id: "+(System.currentTimeMillis()-tSupBound_I))
+    
+    //TODO REMOVE THIS CHECK 
+    //cordWiseBlobs.keySet.foreach { key => assert(cordWiseBlobs.get(key).get.length==cordWiseBlob_I.get(key).get.length) }
+    
     //make sure superPixelId's are ascending Ints
     val keys = cordWiseBlobs.keySet.toList.sorted
     //val keymap = (keys.zip(0 until keys.size)).toMap
     assert(keys.equals((0 until keys.size).toList))
     //def k(a: Int): Int = { keymap.get(a).get }
 
+    val tFeat = System.currentTimeMillis()
     val listOfFeatures = for (i <- 0 until keys.size) yield { featureFn(cordWiseBlobs.get(keys(i)).get) }
+    println("Compute Features per Blob: "+(System.currentTimeMillis()-tFeat))
     val outEdgeMap = edgeMap.map(a => {
       val oldId = a._1
       val oldEdges = a._2
@@ -210,6 +233,7 @@ object runMSRC {
     val outGraph = new GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)](Vector(outNodes.toArray),maskpath) //TODO change the linkCord in graphStruct so it makes sense 
      GraphUtils.writeObjectToFile(graphCachePath,outGraph)
      //Construct Ground Truth 
+     val tGround = System.currentTimeMillis()
         val groundTruthpath =  groundTruthDir+"/"+ nameNoExt+"_GT.bmp"
         val openerGT = new Opener();
         val imgGT = openerGT.openImage(groundTruthpath);
@@ -219,10 +243,10 @@ object runMSRC {
         assert(yDim==gtStack.getHeight)
         assert(zDim==gtStack.getSize)
         
-        val colorToLabelMap = new HashMap[(Int,Int,Int),Int]()
-        val labelCount= new AtomicInteger(0)
+        
+        val labelCount=   if(colorToLabelMap.keySet.size>0) new AtomicInteger(colorToLabelMap.keySet.size) else new AtomicInteger(0)
         val groundTruthMap = new HashMap[Int,Int]()
-        val groundTruthPerPixel = Array.fill(xDim,yDim,zDim){-1}
+        //val groundTruthPerPixel = Array.fill(xDim,yDim,zDim){-1}
         val cordBlob = cordWiseBlobs.iterator
         
         while(cordBlob.hasNext){
@@ -241,28 +265,35 @@ object runMSRC {
           
           val myCo = colorToLabelMap.get((r,g,b)).get
           val old = curLabelCount.getOrElse(myCo,0)
-          groundTruthPerPixel(datum.x)(datum.y)(datum.z)=myCo
-          curLabelCount.put(myCo,old+1)  
+        //  groundTruthPerPixel(datum.x)(datum.y)(datum.z)=myCo
+          curLabelCount.put(myCo,old+1)
           })
           val mostUsedLabel= curLabelCount.maxBy(_._2)._1
           groundTruthMap.put(pixID,mostUsedLabel)
         }
         
+        println("Ground Truth Blob Mapping: "+(System.currentTimeMillis()-tGround))
          GraphUtils.writeObjectToFile(groundCachePath,groundTruthMap)
         
-        GraphUtils.writeObjectToFile( perPixLabelsPath,groundTruthPerPixel)
+     //   GraphUtils.writeObjectToFile( perPixLabelsPath,groundTruthPerPixel)
         val labelsInOrder = (0 until groundTruthMap.size).map(a=>groundTruthMap.get(a).get)
-        val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numClasses,perPixLabelsPath)
+        val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numClasses,groundTruthpath)
          GraphUtils.writeObjectToFile(outLabelsPath,outLabels)
-       
+         
+         //TODO remove debugging 
+       //  val outError= GraphUtils.lossPerPixel(outGraph.originMapFile, outLabels.originalLabelFile,outLabels,colorMap=colorToLabelMap.toMap)
+       //  GraphUtils.printBMPFromGraph(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
+    
+          
+         println("Total Preprocessing time for "+nameNoExt+" :"+(System.currentTimeMillis()-tStartPre))
          new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
         }
         }
       
       
-      
+      GraphUtils.writeObjectToFile(colorMapPath,colorToLabelMap)
       val (training,test) =  if(splitTraining) allData.splitAt(allData.size/2) else (allData,allData)
-      return (training,test) 
+      return (training,test,colorToLabelMap.toMap) 
    }
   
   
@@ -346,6 +377,11 @@ object runMSRC {
     solverOptions.numClasses = options.getOrElse("numClasses","24").toInt //TODO this only makes sense if you end up with the MSRC dataset 
     solverOptions.generateMSRCSupPix = options.getOrElse("supMSRC","false").toBoolean
     solverOptions.squareSLICoption = options.getOrElse("supSquareMSRC","false").toBoolean
+    solverOptions.trainTestEqual = options.getOrElse("trainTestEqual","false").toBoolean
+    solverOptions.superPixelSize = options.getOrElse("S","15").toInt
+    solverOptions.dataFilesDir = options.getOrElse("dataDir","../data/generated/MSRC_ObjCategImageDatabase_v2")
+    solverOptions.imageDataFilesDir = options.getOrElse("imageDir","../data/generated/MSRC_ObjCategImageDatabase_v2/Images")
+    solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir","../data/generated/MSRC_ObjCategImageDatabase_v2/Images")
     if(solverOptions.squareSLICoption) 
       solverOptions.generateMSRCSupPix=true
     val DEBUG_COMPARE_MF_FACTORIE =  options.getOrElse("cmpEnergy","false").toBoolean
@@ -375,7 +411,7 @@ object runMSRC {
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
 
     
-    def getMSRC():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]])={
+    def getMSRC():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int, Int, Int), Int])={
           val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
       
         val graphTrainD = for (i <- 0 until oldtrainData.size) yield {
@@ -386,21 +422,25 @@ object runMSRC {
           val (gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtestData(i).pattern, oldtestData(i).label, solverOptions.numClasses)
           new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
         }
-    return (graphTrainD.toArray.toSeq, graphTestD.toArray.toSeq)
+        val colorMapInt = ImageSegmentationUtils.colormapRGB
+     
+    return (graphTrainD.toArray.toSeq, graphTestD.toArray.toSeq,colorMapInt)
     }
-    def genSquareNoiseD():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]])= {
+    
+    //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
+    def genSquareNoiseD():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int, Int, Int), Int])= {
       val trainData = GraphUtils.genSquareBlobs(solverOptions.dataGenTrainSize,solverOptions.dataGenCanvasSize,solverOptions.dataGenSparsity,solverOptions.numClasses, if(solverOptions.dataNoiseOnlyTest) 0.0 else solverOptions.dataAddedNoise,solverOptions.dataRandSeed).toArray.toSeq
     val testData = GraphUtils.genSquareBlobs(solverOptions.dataGenTestSize,solverOptions.dataGenCanvasSize,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise,solverOptions.dataRandSeed+1).toArray.toSeq
 
-     return (trainData,testData)
+     return (trainData,testData, new HashMap[(Int,Int,Int),Int]().toMap)
     }
     
    
         
     
     
-
-    val (trainData,testData) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption) }else genSquareNoiseD()
+    //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
+    val (trainData,testData, colorlabelMap) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption,solverOptions.trainTestEqual,S=solverOptions.superPixelSize) }else genSquareNoiseD()
    
     
     
@@ -512,6 +552,8 @@ object runMSRC {
     var avgTrainLoss = 0.0
     var avgPerPixTrainLoss = 0.0
     var count=0
+    val invColorMap = colorlabelMap.toMap.map(_.swap)
+    
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)
       
@@ -524,15 +566,21 @@ object runMSRC {
       GraphUtils.printBMPfrom3dMat(GraphUtils.flatten3rdDim( GraphUtils.reConstruct3dMat(prediction, item.pattern.dataGraphLink,
       item.pattern.maxCoord._1+1, item.pattern.maxCoord._2+1, item.pattern.maxCoord._3+1)),"Train"+count+"predRW_"+solverOptions.runName+".bmp")
       */
+        val tmpPath = item.pattern.originMapFile
+                val pathArray = item.pattern.originMapFile.split("/")
+                val lastpart = pathArray(pathArray.length-1)
+        val fileNameExt = lastpart.split("\\.")
+        val fileName = fileNameExt(0)
         
-        GraphUtils.printBMPFromGraph(item.pattern,prediction,0,solverOptions.runName+"_"+count+"_train_predict")
-        GraphUtils.printBMPFromGraph(item.pattern,item.label,0,solverOptions.runName+"_"+count+"_train_true")
-        val supPixToOrig = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.pattern.originMapFile)
-        val origTrueLabel = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.label.originalLabelFile)
+        GraphUtils.printBMPFromGraph(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"_train_predict",colorMap=invColorMap)
+        GraphUtils.printBMPFromGraph(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"_train_true",colorMap=invColorMap)
+        
+        //val supPixToOrig = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.pattern.originMapFile)
+        //val origTrueLabel = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.label.originalLabelFile)
     
       }
      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction) //TODO change this so that it tests the original pixel labels 
-     avgPerPixTrainLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction)
+     avgPerPixTrainLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
       count+=1
     }
     avgTrainLoss = avgTrainLoss / trainData.size
@@ -554,11 +602,16 @@ object runMSRC {
       
       * 
       */
-        GraphUtils.printBMPFromGraph(item.pattern,prediction,0,solverOptions.runName+"_"+count+"_test_predict")
-        GraphUtils.printBMPFromGraph(item.pattern,item.label,0,solverOptions.runName+"_"+count+"_test_true")
+        val tmpPath = item.pattern.originMapFile
+                val pathArray = item.pattern.originMapFile.split("/")
+                val lastpart = pathArray(pathArray.length-1)
+        val fileNameExt = lastpart.split("\\.")
+        val fileName = fileNameExt(0)
+        GraphUtils.printBMPFromGraph(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"_test_predict",colorMap=invColorMap)
+        GraphUtils.printBMPFromGraph(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"_test_true",colorMap=invColorMap)
         
       }
-      avgPerPixTestLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction)
+      avgPerPixTestLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
       avgTestLoss += myGraphSegObj.lossFn(item.label, prediction)
       count+=1
     }
