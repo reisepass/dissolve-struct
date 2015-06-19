@@ -97,7 +97,63 @@ object runMSRC {
   }
 
   
-  
+  def coOccurancePerSuperRGB( mask:Array[Array[Array[Int]]], image: ImageStack, numSuperPix:Int,binsPerColor:Int=3,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1))):Map[Int,Array[Double]]={
+        val maxColor = 255
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
+        val col = image.getColorModel
+        val binWidth = maxColor/binsPerColor
+        val maxBin = (binsPerColor-1)*binsPerColor*binsPerColor+(binsPerColor-1)*binsPerColor+(binsPerColor-1)+1
+        def whichBin(r:Int,g:Int,b:Int):Int={ 
+          val rBin = min(r/binWidth,binsPerColor-1)
+          val gBin = min(g/binWidth,binsPerColor-1)
+          val bBin = min(b/binWidth,binsPerColor-1)
+          rBin*(binsPerColor*binsPerColor)+gBin*binsPerColor+bBin
+        }
+        //val coOccuranceMaties = new HashMap[Int,Array[Array[Int]]]
+        val coOccuranceMaties = (0 until numSuperPix).toList.map { key => (key -> Array.fill(maxBin,maxBin){0}) }.toMap
+        val coNormalizingConst = Array.fill(numSuperPix){0.0}
+        for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+           val supID = mask(x)(y)(z)
+           val rgb= image.getVoxel(x,y,z).asInstanceOf[Int]
+           val r=col.getRed(rgb)
+           val g=col.getGreen(rgb)
+           val b=col.getBlue(rgb)
+           val bin = whichBin(r,g,b)
+           
+           directions.foreach( (el:(Int,Int,Int))=>{
+             val neighRGB = image.getVoxel(x+el._1,y+el._2,z+el._3).asInstanceOf[Int]
+             val neighBin = whichBin(col.getRed(neighRGB),col.getGreen(neighRGB),col.getBlue(neighRGB))
+             coOccuranceMaties.get(supID).get(bin)(neighBin)+=1 //If this throws an error then there must be a super pixel not in (0,numSuperPix]
+             coNormalizingConst(supID)+=1.0
+             if(bin!=neighBin)
+               coOccuranceMaties.get(supID).get(neighBin)(bin)+=1 //I dont care about direction of the neighbour. Someone could also use negative values in the directions 
+           })
+           
+        }
+        
+        
+        //I only need the upper triagular of the matrix since its symetric. Also i want all my features to be vectorized so
+        val n = maxBin
+ val out=coOccuranceMaties.map( ((pair:(Int,Array[Array[Int]]))=> {
+   val key = pair._1
+   val myCoOccur = pair._2
+   
+        
+        val linFeat = Array.fill((n * (n+1)) / 2){0.0}; 
+    for (r<- 0 until maxBin ; c <- 0 until maxBin)
+    {
+     
+        val i = (n * r) + c-((r * (r+1))/2) 
+        linFeat(i) = myCoOccur(r)(c)/coNormalizingConst(key)
+      
+    }
+ (key,linFeat)
+ })).toMap
+ 
+   out
+  }
 
   
   def genMSRCsupPix( numClasses : Int, runName:String = "_", isSquare:Boolean=false,splitTraining:Boolean=true,S:Int, imageDataSource:String="../data/generated/msrcSub2/Images", groundTruthDataSource:String = "../data/generated/msrcSub2/GroundTruth"):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int,Int,Int),Int])={
@@ -176,7 +232,7 @@ object runMSRC {
        
         
         
-        val histBinsPerCol = 3
+        val histBinsPerCol = 5
         val histWidt = 255 / histBinsPerCol
         val featureFn = (data: List[DatumCord[(Int, Int, Int)]]) => {
           val redHist = Array.fill(histBinsPerCol) { 0 }
@@ -217,7 +273,12 @@ object runMSRC {
     //def k(a: Int): Int = { keymap.get(a).get }
 
     val tFeat = System.currentTimeMillis()
-    val listOfFeatures = for (i <- 0 until keys.size) yield { featureFn(cordWiseBlobs.get(keys(i)).get) }
+    
+    
+    val histFeatures = for (i <- 0 until keys.size) yield { featureFn(cordWiseBlobs.get(i).get) }
+    val coOccurFeats = coOccurancePerSuperRGB(mask,aStack,keys.size) //TODO generalize this to work for greyscale data    
+    
+        
     println("Compute Features per Blob: "+(System.currentTimeMillis()-tFeat))
     val outEdgeMap = edgeMap.map(a => {
       val oldId = a._1
@@ -225,8 +286,9 @@ object runMSRC {
       ((oldId), oldEdges.map { oldEdge => (oldEdge) })
     })
     
-    val outNodes = for ( id <- 0 until listOfFeatures.size) yield{
-      Node(id,listOfFeatures(id), collection.mutable.Set(outEdgeMap.get(id).get.toSeq:_*))
+    
+    val outNodes = for ( id <- 0 until keys.size) yield{
+      Node(id,Vector(histFeatures(id).toArray++(coOccurFeats.get(id).get)) , collection.mutable.Set(outEdgeMap.get(id).get.toSeq:_*))
     }
     
     //val linkCords = cordWiseBlobs.map( a=> { a._1->a._2.map(daCord => { (daCord.x,daCord.y,daCord.z)}) })
@@ -379,9 +441,9 @@ object runMSRC {
     solverOptions.squareSLICoption = options.getOrElse("supSquareMSRC","false").toBoolean
     solverOptions.trainTestEqual = options.getOrElse("trainTestEqual","false").toBoolean
     solverOptions.superPixelSize = options.getOrElse("S","15").toInt
-    solverOptions.dataFilesDir = options.getOrElse("dataDir","../data/generated/MSRC_ObjCategImageDatabase_v2")
-    solverOptions.imageDataFilesDir = options.getOrElse("imageDir","../data/generated/MSRC_ObjCategImageDatabase_v2/Images")
-    solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir","../data/generated/MSRC_ObjCategImageDatabase_v2/Images")
+    solverOptions.dataFilesDir = options.getOrElse("dataDir","###")
+    solverOptions.imageDataFilesDir = options.getOrElse("imageDir",if(solverOptions.dataFilesDir=="###") "../data/generated/MSRC_ObjCategImageDatabase_v2/Images" else solverOptions.dataFilesDir+"/Images")
+    solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",if(solverOptions.dataFilesDir=="###") "../data/generated/MSRC_ObjCategImageDatabase_v2/GroundTruth" else solverOptions.dataFilesDir+"/GroundTruth")
     if(solverOptions.squareSLICoption) 
       solverOptions.generateMSRCSupPix=true
     val DEBUG_COMPARE_MF_FACTORIE =  options.getOrElse("cmpEnergy","false").toBoolean
@@ -410,6 +472,10 @@ object runMSRC {
     
     // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
 
+    
+    //genColorfullSquaresData(howMany: Int, canvasSize: Int, squareSize : Int, portionBackground: Double, numClasses: Int, featureNoise: Double, outputDir:String){
+    GraphUtils.genColorfullSquaresDataSuperNoise(50,100,20,0.75,3,0.75,"../data/generated/genDat10",320)
+    
     
     def getMSRC():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int, Int, Int), Int])={
           val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
@@ -440,7 +506,7 @@ object runMSRC {
     
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption,solverOptions.trainTestEqual,S=solverOptions.superPixelSize) }else genSquareNoiseD()
+    val (trainData,testData, colorlabelMap) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption,solverOptions.trainTestEqual,S=solverOptions.superPixelSize,imageDataSource=solverOptions.imageDataFilesDir,groundTruthDataSource= solverOptions.groundTruthDataFilesDir) }else genSquareNoiseD()
    
     
     
@@ -572,15 +638,19 @@ object runMSRC {
         val fileNameExt = lastpart.split("\\.")
         val fileName = fileNameExt(0)
         
+        val tPrint = System.currentTimeMillis()
         GraphUtils.printBMPFromGraph(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"_train_predict",colorMap=invColorMap)
         GraphUtils.printBMPFromGraph(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"_train_true",colorMap=invColorMap)
-        
+       
         //val supPixToOrig = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.pattern.originMapFile)
         //val origTrueLabel = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.label.originalLabelFile)
     
       }
+     
      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction) //TODO change this so that it tests the original pixel labels 
+     val tFindLoss = System.currentTimeMillis()
      avgPerPixTrainLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
+   //  println("PerPixel loss counting"+(System.currentTimeMillis()-tFindLoss))
       count+=1
     }
     avgTrainLoss = avgTrainLoss / trainData.size
@@ -602,14 +672,15 @@ object runMSRC {
       
       * 
       */
+        /*
         val tmpPath = item.pattern.originMapFile
                 val pathArray = item.pattern.originMapFile.split("/")
                 val lastpart = pathArray(pathArray.length-1)
         val fileNameExt = lastpart.split("\\.")
         val fileName = fileNameExt(0)
         GraphUtils.printBMPFromGraph(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"_test_predict",colorMap=invColorMap)
-        GraphUtils.printBMPFromGraph(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"_test_true",colorMap=invColorMap)
-        
+       GraphUtils.printBMPFromGraph(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"_test_true",colorMap=invColorMap)
+        */
       }
       avgPerPixTestLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
       avgTestLoss += myGraphSegObj.lossFn(item.label, prediction)

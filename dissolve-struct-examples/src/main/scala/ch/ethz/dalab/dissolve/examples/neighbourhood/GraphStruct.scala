@@ -61,7 +61,7 @@ case class Node[Features](
 
 }
 
-case class GraphLabels(d: Vector[Int], numClasses: Int, originalLabelFile: String="None") extends Serializable {
+case class GraphLabels(d: Vector[Int], numClasses: Int, originalLabelFile: String = "None") extends Serializable {
   assert(numClasses > 0)
   def isInverseOf(other: GraphLabels): Boolean = {
     if (other.d.size != d.size)
@@ -91,38 +91,36 @@ object GraphUtils {
   }
   val curTime = System.currentTimeMillis()
 
-  
-  //val someColors = List( (240,163,255),(0,117,220),(153,63,0),(76,0,92),(25,25,25),(0,92,49),(43,206,72),(255,204,153),(128,128,128),(148,255,181),(143,124,0),(157,204,0),(194,0,136),(0,51,128),(255,164,5),(255,168,187),(66,102,0),(255,0,16),(94,241,242),(0,153,143),(224,255,102),(116,10,255),(153,0,0),(255,255,128),(255,255,0),(255,80,5))
-  val someColors =List(  0x9C2141 ,   0x6AF23A ,   0x4BCCDB ,   0x8B66EE ,   0xF7BE24 ,   0x235B1D ,   0x253C6F ,   0xE9B79D ,   0xF2531C ,   0xE033A5 ,   0xACE89F ,   0x86530D ,   0xE2ACDE ,   0x3D2F24 ,   0x4EA1EC ,   0x8BB630 ,   0xEE3FF2 ,   0x788388 ,   0x701E68 ,   0xEB7F96 ,   0x3AD26D ,   0xE6CC76 ,   0x878751 ,   0xEAED38 ,   0xE27B4C ,   0xB664C3 ,   0xC8E5CB ,   0xA7221B ,   0x418F66 ,   0xA8CAEF ,   0x87658F ,   0x561513 ,   0x31EAAE ,   0x4B1235 ,   0x9C8516 ,   0x425AAF ,   0xA16E51 ,   0x2C9290 ,   0xD6296D ,   0xE2304B ,   0xACE71F ,   0xEC7C1F ,   0x4B89A9 ,   0x1E2E3A ,   0xECAB51 ,   0x5477EB ,   0x53654B ,   0xE9DDEA ,   0xECE9B0 ,   0x89EBC2 ,   0x3C5872 ,   0xC25D52 ,   0xEB69E2 ,   0xC9E86A ,   0xE970C0 ,   0xB28494 ,   0xAFAA8A ,   0x659D53 ,   0x8E74BB ,   0x449E26 ,   0xDEA870 ,   0xAC5A7A ,   0x8DBD98 ,   0x6A439B ,   0x336161 ,   0x7C5451 ,   0x54ECE0 ,   0x992F94 ,   0xA42875 ,   0x58400A ,   0xE72BC9 ,   0x778DE6 ,   0xF0589E ,   0xAA4E27 ,   0x7AB3BD ,   0xB9AFB6 ,   0x2F1E3F ,   0x8667CF ,   0x2F410A ,   0x49C393 ,   0x85394C ,   0xA348C4 ,   0x4B7518 ,   0xE985B6 ,   0xD3E18D ,   0x89EA53 ,   0x84972B ,   0x43B162 ,   0x554666 ,   0xB266A8 ,   0x1C2E1C ,   0xCC58EF ,   0xAD6463 ,   0xCC5121 ,   0xEB6576 ,   0xBB9BEA ,   0xB6BC32 ,   0xA795C9 ,   0x54BAA9 ,   0xC26F1E ,   0x781E4E ,   0xEA5C52 ,   0x4C4824 ,   0xF0ACAD ,   0x88B955 ,   0x4E514C ,   0x5FABD7 ,   0x903C35 ,   0xD02C1B ,   0x817224 ,   0xC47EEE ,   0x45CB2E ,   0xA92D61 ,   0xAE7439 ,   0x5E8250 ,   0x5B1228 ,   0x552A60 ,   0xE98675 ,   0xE38CE7 ,   0xEAB1C9 ,   0x84E975 ,   0x381D2C ,   0xAA8873 ,   0x68EF97 ,   0x7DBD7D ,   0x3D5E95 ,   0xEBD039 ,   0xB6E784 ,   0x9991AB ,   0x592F12 ,   0xE79F20 ,   0x558C79 ,   0x9CAB6C ,   0x2C2809 ,   0x3C1918 ,   0x816D6F ,   0x85CA2B ,   0xB9CE97 ,   0x6A3A5C ,   0x506628 ,   0x95E3D0 ,   0x338435 ,   0x92AEA6 ,   0xCA5287 ,   0xD28DD0 ,   0xC3A72B ,   0xAD7A16 ,   0x5E7FC5 ,   0xB57BA6 ,   0x275639 ,   0x734633 ,   0xC14A9F ,   0x98AAE0 ,   0x94E3EF ,   0xC8395A ,   0x7B745D ,   0x876176 ,   0xDCC3E9 ,   0xAA2532 ,   0xE6D3CB ,   0x842C0F ,   0x3C3271 ,   0xBDAB61 ,   0xE95884 ,   0x90417E ,   0x6F652F ,   0x751520 ,   0x5785B8 ,   0xDED9BB ,   0xE5E570 ,   0xD6C558 ,   0xCC3DBE ,   0xBDE3DF ,   0xE89037 ,   0x47D557 ,   0xC25E6D ,   0x75739B ,   0x5E3C45 ,   0x869044 ,   0xD88891 ,   0xC89A96 ,   0xAD9540 ,   0x5CC5EA ,   0xDFCC93 ,   0xDA946E ,   0xEC2C85 ,   0x835325 ,   0xAABAD1 ,   0xC9DE3B ,   0xC4893A ,   0x7C558F ,   0xC2A872 ,   0xBCD8EA ,   0xE797B9 ,   0x72EBAD ,   0xB0EE48 ,   0xF3392E ,   0x418D98 ,   0xADE564 ,   0x918860 )
-  def getUniqueColors(amount:Int):List[Int]={//TODO remove this is not working
+  val someColorsRGB = List((240, 163, 255), (0, 117, 220), (153, 63, 0), (76, 0, 92), (25, 25, 25), (0, 92, 49), (43, 206, 72), (255, 204, 153), (128, 128, 128), (148, 255, 181), (143, 124, 0), (157, 204, 0), (194, 0, 136), (0, 51, 128), (255, 164, 5), (255, 168, 187), (66, 102, 0), (255, 0, 16), (94, 241, 242), (0, 153, 143), (224, 255, 102), (116, 10, 255), (153, 0, 0), (255, 255, 128), (255, 255, 0), (255, 80, 5))
+  val someColors = List(0x9C2141, 0x6AF23A, 0x4BCCDB, 0x8B66EE, 0xF7BE24, 0x235B1D, 0x253C6F, 0xE9B79D, 0xF2531C, 0xE033A5, 0xACE89F, 0x86530D, 0xE2ACDE, 0x3D2F24, 0x4EA1EC, 0x8BB630, 0xEE3FF2, 0x788388, 0x701E68, 0xEB7F96, 0x3AD26D, 0xE6CC76, 0x878751, 0xEAED38, 0xE27B4C, 0xB664C3, 0xC8E5CB, 0xA7221B, 0x418F66, 0xA8CAEF, 0x87658F, 0x561513, 0x31EAAE, 0x4B1235, 0x9C8516, 0x425AAF, 0xA16E51, 0x2C9290, 0xD6296D, 0xE2304B, 0xACE71F, 0xEC7C1F, 0x4B89A9, 0x1E2E3A, 0xECAB51, 0x5477EB, 0x53654B, 0xE9DDEA, 0xECE9B0, 0x89EBC2, 0x3C5872, 0xC25D52, 0xEB69E2, 0xC9E86A, 0xE970C0, 0xB28494, 0xAFAA8A, 0x659D53, 0x8E74BB, 0x449E26, 0xDEA870, 0xAC5A7A, 0x8DBD98, 0x6A439B, 0x336161, 0x7C5451, 0x54ECE0, 0x992F94, 0xA42875, 0x58400A, 0xE72BC9, 0x778DE6, 0xF0589E, 0xAA4E27, 0x7AB3BD, 0xB9AFB6, 0x2F1E3F, 0x8667CF, 0x2F410A, 0x49C393, 0x85394C, 0xA348C4, 0x4B7518, 0xE985B6, 0xD3E18D, 0x89EA53, 0x84972B, 0x43B162, 0x554666, 0xB266A8, 0x1C2E1C, 0xCC58EF, 0xAD6463, 0xCC5121, 0xEB6576, 0xBB9BEA, 0xB6BC32, 0xA795C9, 0x54BAA9, 0xC26F1E, 0x781E4E, 0xEA5C52, 0x4C4824, 0xF0ACAD, 0x88B955, 0x4E514C, 0x5FABD7, 0x903C35, 0xD02C1B, 0x817224, 0xC47EEE, 0x45CB2E, 0xA92D61, 0xAE7439, 0x5E8250, 0x5B1228, 0x552A60, 0xE98675, 0xE38CE7, 0xEAB1C9, 0x84E975, 0x381D2C, 0xAA8873, 0x68EF97, 0x7DBD7D, 0x3D5E95, 0xEBD039, 0xB6E784, 0x9991AB, 0x592F12, 0xE79F20, 0x558C79, 0x9CAB6C, 0x2C2809, 0x3C1918, 0x816D6F, 0x85CA2B, 0xB9CE97, 0x6A3A5C, 0x506628, 0x95E3D0, 0x338435, 0x92AEA6, 0xCA5287, 0xD28DD0, 0xC3A72B, 0xAD7A16, 0x5E7FC5, 0xB57BA6, 0x275639, 0x734633, 0xC14A9F, 0x98AAE0, 0x94E3EF, 0xC8395A, 0x7B745D, 0x876176, 0xDCC3E9, 0xAA2532, 0xE6D3CB, 0x842C0F, 0x3C3271, 0xBDAB61, 0xE95884, 0x90417E, 0x6F652F, 0x751520, 0x5785B8, 0xDED9BB, 0xE5E570, 0xD6C558, 0xCC3DBE, 0xBDE3DF, 0xE89037, 0x47D557, 0xC25E6D, 0x75739B, 0x5E3C45, 0x869044, 0xD88891, 0xC89A96, 0xAD9540, 0x5CC5EA, 0xDFCC93, 0xDA946E, 0xEC2C85, 0x835325, 0xAABAD1, 0xC9DE3B, 0xC4893A, 0x7C558F, 0xC2A872, 0xBCD8EA, 0xE797B9, 0x72EBAD, 0xB0EE48, 0xF3392E, 0x418D98, 0xADE564, 0x918860)
+  def getUniqueColors(amount: Int): List[Int] = { //TODO remove this is not working
     val lowerLimit = 0x10;
-    val upperLimit = 0xE0;    
-    val colorStep = ((upperLimit-lowerLimit)/Math.pow(amount,1f/3)).asInstanceOf[Int];
+    val upperLimit = 0xE0;
+    val colorStep = ((upperLimit - lowerLimit) / Math.pow(amount, 1f / 3)).asInstanceOf[Int];
 
     val colors = new ListBuffer[Int]();
 
-    var R= lowerLimit.asInstanceOf[Int]
-    var G= lowerLimit.asInstanceOf[Int]
-    var B= lowerLimit.asInstanceOf[Int]
-    while(R<upperLimit){
-      while(G<upperLimit){
-        while(B<upperLimit){
-                if (colors.length >= amount) { //The calculated step is not very precise, so this safeguard is appropriate
-                    return colors.toList;
-                } else {
-                    val color = (R<<16)+(G<<8)+(B);
-                    colors+=(color);
-                } 
-                B+=colorStep
-            }
-        G+=colorStep
+    var R = lowerLimit.asInstanceOf[Int]
+    var G = lowerLimit.asInstanceOf[Int]
+    var B = lowerLimit.asInstanceOf[Int]
+    while (R < upperLimit) {
+      while (G < upperLimit) {
+        while (B < upperLimit) {
+          if (colors.length >= amount) { //The calculated step is not very precise, so this safeguard is appropriate
+            return colors.toList;
+          } else {
+            val color = (R << 16) + (G << 8) + (B);
+            colors += (color);
+          }
+          B += colorStep
+        }
+        G += colorStep
       }
-      R+=colorStep
+      R += colorStep
     }
     return colors.toList;
-}
-  
-  
+  }
+
   def reConstruct3dMat(labels: GraphLabels, dataLink: HashMap[Int, (Int, Int, Int)], xDim: Int, yDim: Int, zDim: Int): D3ArrInt = {
 
     val out = Array.fill(xDim, yDim, zDim) { 0 }
@@ -133,28 +131,33 @@ object GraphUtils {
     out
   }
 
-  def printBMPFromGraph(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non",colorMap:Map[Int,(Int,Int,Int)]=null) {
+  def printBMPFromGraph(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non", colorMap: Map[Int, (Int, Int, Int)] = null) {
 
-    
     val mask = readObjectFromFile[Array[Array[Array[Int]]]](graph.originMapFile)
     //Need to construct a new image.  
     val xDim = mask.length
     val yDim = mask(0).length
-    
+
     val img: BufferedImage = new BufferedImage(xDim, yDim,
       BufferedImage.TYPE_INT_RGB);
-    
+
     for (x <- 0 until xDim; y <- 0 until yDim) {
       val sID = mask(x)(y)(slice3dAt)
       val myClassPred = labels.d(sID)
-      val myCol = if(colorMap==null) someColors(myClassPred%someColors.length) else{
-        val rgb = colorMap.get(myClassPred).get
-        new Color(rgb._1,rgb._2,rgb._3).getRGB()
+      val myCol = if (colorMap == null) someColors(myClassPred % someColors.length) else {
+        try {
+          val rgb = colorMap.get(myClassPred).get
+          new Color(rgb._1, rgb._2, rgb._3).getRGB()
+        } catch {
+          case e: Exception =>
+            { println("Error myClassPred:" + myClassPred + " was not found") }
+            return ()
+        }
       }
-      img.setRGB(x,y,myCol)
-      
+      img.setRGB(x, y, myCol)
+
     }
-     ImageIO.write(img, "BMP", new File("../data/debug/" + name+".bmp")); //TODO change this output location
+    ImageIO.write(img, "BMP", new File("../data/debug/" + name + ".bmp")); //TODO change this output location
   }
 
   //TODO find a nice scala-esq way of doing this. essencially i want the matlab function 'squeeze'
@@ -221,33 +224,32 @@ object GraphUtils {
     ois.close()
     obj.asInstanceOf[T]
   }
-  
-  def lossPerPixel(superPixelMapping:String, originalTrue:String, prediction:GraphLabels,lossFn :(Int,Int)=>Double = (a:Int,b:Int)=>{if(a==b) 0.0 else 1.0} , colorMap:Map[(Int,Int,Int),Int]):Double={
+
+  def lossPerPixel(superPixelMapping: String, originalTrue: String, prediction: GraphLabels, lossFn: (Int, Int) => Double = (a: Int, b: Int) => { if (a == b) 0.0 else 1.0 }, colorMap: Map[(Int, Int, Int), Int]): Double = {
     assert(!originalTrue.equals("None"))
     val supPixToOrig = readObjectFromFile[Array[Array[Array[Int]]]](superPixelMapping)
-    
-      val openerGT = new Opener();
-        val imgGT = openerGT.openImage(originalTrue);
-        val gtStack = imgGT.getStack
-        val gtColMod= gtStack.getColorModel
-        
-    
+
+    val openerGT = new Opener();
+    val imgGT = openerGT.openImage(originalTrue);
+    val gtStack = imgGT.getStack
+    val gtColMod = gtStack.getColorModel
+
     val xDim = supPixToOrig.length
     val yDim = supPixToOrig(0).length
     val zDim = supPixToOrig(0)(0).length
-assert(xDim==gtStack.getWidth)
-        assert(yDim==gtStack.getHeight)
-        assert(zDim==gtStack.getSize)
-        
-    val eachLoss= for( x <- 0 until xDim ; y<- 0 until yDim ; z <- 0 until zDim) yield{
-      val trueLabelColor = gtStack.getVoxel(x,y,z)
-      val trueRGB = (gtColMod.getRed(trueLabelColor.asInstanceOf[Int]),gtColMod.getGreen(trueLabelColor.asInstanceOf[Int]),gtColMod.getBlue(trueLabelColor.asInstanceOf[Int]))
+    assert(xDim == gtStack.getWidth)
+    assert(yDim == gtStack.getHeight)
+    assert(zDim == gtStack.getSize)
+
+    val eachLoss = for (x <- 0 until xDim; y <- 0 until yDim; z <- 0 until zDim) yield {
+      val trueLabelColor = gtStack.getVoxel(x, y, z)
+      val trueRGB = (gtColMod.getRed(trueLabelColor.asInstanceOf[Int]), gtColMod.getGreen(trueLabelColor.asInstanceOf[Int]), gtColMod.getBlue(trueLabelColor.asInstanceOf[Int]))
       val trueLabel = colorMap.get(trueRGB).get
-      val requiredSuperPixelID  = supPixToOrig(x)(y)(z)
+      val requiredSuperPixelID = supPixToOrig(x)(y)(z)
       val predictedLabel = prediction.d(requiredSuperPixelID)
-      lossFn(trueLabel,predictedLabel)
+      lossFn(trueLabel, predictedLabel)
     }
-    return(eachLoss.sum/eachLoss.length)
+    return (eachLoss.sum / eachLoss.length)
   }
 
   val convertMSRC_counter = new AtomicInteger(0)
@@ -601,6 +603,122 @@ assert(xDim==gtStack.getWidth)
       new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](yList, xGraph)
     }
     out
+  }
+
+  def genColorfullSquaresData(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double, outputDir: String, randomSeed:Int=(-1) ){
+    assert(canvasSize % squareSize == 0)
+    assert(portionBackground <= 1)
+    assert(featureNoise <= 1)
+    val random = if(randomSeed==(-1)) new java.util.Random() else new java.util.Random(randomSeed)
+     val colorMap = Random.shuffle(someColorsRGB)
+    val pathF = new File(outputDir + "/Images")
+    val pathFGT = new File(outputDir + "/GroundTruth")
+    if (!pathF.exists())
+      pathF.mkdirs()
+    if (!pathFGT.exists())
+      pathFGT.mkdirs()
+
+    for (count <- 1 to howMany) {
+      val uberPix = Array.fill(canvasSize / squareSize, canvasSize / squareSize) { -1 }
+      val outLabel = Array.fill(canvasSize, canvasSize) { -1 }
+
+      for (uX <- 0 until uberPix.length; uY <- 0 until uberPix(0).length) {
+        if (random.nextDouble() < portionBackground)
+          uberPix(uX)(uY) = 0
+        else
+          uberPix(uX)(uY) = random.nextInt(numClasses - 1) + 1
+      }
+      for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
+        outLabel(x)(y) = uberPix(x / squareSize)(y / squareSize)
+      }
+
+      val imgData: BufferedImage = new BufferedImage(canvasSize, canvasSize,
+        BufferedImage.TYPE_INT_RGB);
+      val imgGT: BufferedImage = new BufferedImage(canvasSize, canvasSize,
+        BufferedImage.TYPE_INT_RGB);
+
+     
+
+      for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
+
+        val myLabel = outLabel(x)(y)
+        val rN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * random.nextInt(256)) / 2).asInstanceOf[Int]))
+        val gN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * random.nextInt(256)) / 2).asInstanceOf[Int]))
+        val bN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * random.nextInt(256)) / 2).asInstanceOf[Int]))
+
+        val noisyColor = new Color(rN, gN, bN).getRGB
+        imgData.setRGB(x, y, noisyColor)
+        val trueColor = new Color(colorMap(myLabel)._1, colorMap(myLabel)._2, colorMap(myLabel)._3).getRGB
+        imgGT.setRGB(x, y, trueColor)
+
+      }
+      ImageIO.write(imgData, "BMP", new File(outputDir + "/Images/genImg_" + count + ".bmp")); //TODO change this output location
+      ImageIO.write(imgGT, "BMP", new File(outputDir + "/GroundTruth/genImg_" + count + "_GT.bmp")); //TODO change this output location
+    }
+  
+  }
+  
+  
+  def genColorfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double, outputDir: String, randomSeed:Int=(-1) ){
+    assert(canvasSize % squareSize == 0)
+    assert(portionBackground <= 1)
+    assert(featureNoise <= 1)
+    val random = if(randomSeed==(-1)) new java.util.Random() else new java.util.Random(randomSeed)
+     val colorMap = Random.shuffle(someColorsRGB)
+    val pathF = new File(outputDir + "/Images")
+    val pathFGT = new File(outputDir + "/GroundTruth")
+    if (!pathF.exists())
+      pathF.mkdirs()
+    if (!pathFGT.exists())
+      pathFGT.mkdirs()
+
+    for (count <- 1 to howMany) {
+      val uberPix = Array.fill(canvasSize / squareSize, canvasSize / squareSize) { -1 }
+      val uberNoise =Array.fill(canvasSize / squareSize, canvasSize / squareSize) { (-1,-1,-1) }
+      val outLabel = Array.fill(canvasSize, canvasSize) { -1 }
+
+      
+       for (uX <- 0 until uberPix.length; uY <- 0 until uberPix(0).length) {
+        uberNoise(uX)(uY)=(random.nextInt(256),random.nextInt(256),random.nextInt(256))
+      }
+       
+       
+      for (uX <- 0 until uberPix.length; uY <- 0 until uberPix(0).length) {
+        if (random.nextDouble() < portionBackground)
+          uberPix(uX)(uY) = 0
+        else
+          uberPix(uX)(uY) = random.nextInt(numClasses - 1) + 1
+      }
+      for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
+        outLabel(x)(y) = uberPix(x / squareSize)(y / squareSize)
+      }
+
+      val imgData: BufferedImage = new BufferedImage(canvasSize, canvasSize,
+        BufferedImage.TYPE_INT_RGB);
+      val imgGT: BufferedImage = new BufferedImage(canvasSize, canvasSize,
+        BufferedImage.TYPE_INT_RGB);
+
+      
+     
+
+      for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
+
+        val myLabel = outLabel(x)(y)
+        val uX = x/squareSize
+        val uY = y/squareSize
+        val rN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) / 2).asInstanceOf[Int]))
+        val gN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) / 2).asInstanceOf[Int]))
+        val bN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) / 2).asInstanceOf[Int]))
+
+        val noisyColor = new Color(rN, gN, bN).getRGB
+        imgData.setRGB(x, y, noisyColor)
+        val trueColor = new Color(colorMap(myLabel)._1, colorMap(myLabel)._2, colorMap(myLabel)._3).getRGB
+        imgGT.setRGB(x, y, trueColor)
+
+      }
+      ImageIO.write(imgData, "BMP", new File(outputDir + "/Images/genImg_" + count + ".bmp")); //TODO change this output location
+      ImageIO.write(imgGT, "BMP", new File(outputDir + "/GroundTruth/genImg_" + count + "_GT.bmp")); //TODO change this output location
+    }
   }
 
 }
