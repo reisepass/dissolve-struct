@@ -659,7 +659,7 @@ object GraphUtils {
   }
   
   
-  def genColorfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double, outputDir: String, randomSeed:Int=(-1) ){
+  def genColorfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1) ){
     assert(canvasSize % squareSize == 0)
     assert(portionBackground <= 1)
     assert(featureNoise <= 1)
@@ -706,9 +706,9 @@ object GraphUtils {
         val myLabel = outLabel(x)(y)
         val uX = x/squareSize
         val uY = y/squareSize
-        val rN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) / 2).asInstanceOf[Int]))
-        val gN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) / 2).asInstanceOf[Int]))
-        val bN = min(255, max(0, (((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) / 2).asInstanceOf[Int]))
+        val rN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val gN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val bN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
 
         val noisyColor = new Color(rN, gN, bN).getRGB
         imgData.setRGB(x, y, noisyColor)
@@ -719,6 +719,21 @@ object GraphUtils {
       ImageIO.write(imgData, "BMP", new File(outputDir + "/Images/genImg_" + count + ".bmp")); //TODO change this output location
       ImageIO.write(imgGT, "BMP", new File(outputDir + "/GroundTruth/genImg_" + count + "_GT.bmp")); //TODO change this output location
     }
+  
+   val pw = new PrintWriter(new File(outputDir+"/dataGenerationConfig.cfg" ))
+   
+   pw.write("howMany:"+howMany)
+       pw.write("\ncanvasSize:"+canvasSize)
+       pw.write("\nsquareSize:"+squareSize) 
+       pw.write("\nportionBackground:"+portionBackground) 
+       pw.write("\nnumClasses:"+numClasses) 
+       pw.write("\nfeatureNoise:"+featureNoise)
+       pw.write("\nfineGrainNoise:"+fineGrainNoise) 
+       pw.write("\noutputDir:"+outputDir) 
+       pw.write("\nrandomSeed:"+randomSeed)
+pw.write(" ")
+pw.close
+    
   }
 
 }

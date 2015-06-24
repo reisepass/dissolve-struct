@@ -54,7 +54,12 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       val label = yDat.d(idx)
       val startIdx = label * xFeatures
       val endIdx = startIdx + xFeatures
-      unary(startIdx until endIdx) := xDat.getF(idx) + unary(startIdx until endIdx)
+      val curF =xDat.getF(idx) 
+      if(curF.size!=(endIdx-startIdx))
+        print("wtf")
+      if(endIdx > unary.size)
+        print("wtf2")
+      unary(startIdx until endIdx) :=curF + unary(startIdx until endIdx)
     }
 
     phi(0 until (unaryFeatureSize)) := unary
