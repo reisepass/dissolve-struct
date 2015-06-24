@@ -246,9 +246,9 @@ class DBCFWSolverTuned[X, Y](
         }
           //assert(dualityGap>0)
         
-        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s"
+        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s"
         .format(solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
-            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f"  ))
+            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f" ,if(solverOptions.squareSLICoption) "t" else "f" , solverOptions.superPixelSize, solverOptions.dataSetName, if(solverOptions.trainTestEqual)"t" else "f"))
         //TODO need to add expID tag, maybe git Version 
         
         

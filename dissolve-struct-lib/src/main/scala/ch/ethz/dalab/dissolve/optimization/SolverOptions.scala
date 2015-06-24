@@ -58,12 +58,18 @@ class SolverOptions[X, Y] extends Serializable {
   var dataGenTrainSize = 30
   var dataGenCanvasSize=16
   var dataRandSeed= (-1)
+  var isColor = true
+  var dataSetName ="NONAME"
   
   var useMSRC = false
   var generateMSRCSupPix = false
   var squareSLICoption=false
   var useNaiveUnaryMax = false
-  
+  var trainTestEqual=false
+  var superPixelSize=(-1)
+  var dataFilesDir=""
+  var imageDataFilesDir=""
+  var groundTruthDataFilesDir=""
   //Which decode func 
   var useMF=false
   var learningRate = 0.1
