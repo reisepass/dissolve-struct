@@ -476,10 +476,11 @@ object runMSRC {
     solverOptions.isColor = options.getOrElse("isColor","true").toBoolean
     solverOptions.superPixelSize = options.getOrElse("S","15").toInt
     solverOptions.dataFilesDir = options.getOrElse("dataDir","###")
+    assert(!solverOptions.dataFilesDir.equals("###"),"Error,  Please specify a the 'dataDir' paramater")
     val tmpDir = solverOptions.dataFilesDir.split("/")
     solverOptions.dataSetName = tmpDir(tmpDir.length-1)
-    solverOptions.imageDataFilesDir = options.getOrElse("imageDir",if(solverOptions.dataFilesDir=="###") "../data/generated/MSRC_ObjCategImageDatabase_v2/Images" else solverOptions.dataFilesDir+"/Images")
-    solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",if(solverOptions.dataFilesDir=="###") "../data/generated/MSRC_ObjCategImageDatabase_v2/GroundTruth" else solverOptions.dataFilesDir+"/GroundTruth")
+    solverOptions.imageDataFilesDir = options.getOrElse("imageDir",  solverOptions.dataFilesDir+"/Images")
+    solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",  solverOptions.dataFilesDir+"/GroundTruth")
     if(solverOptions.squareSLICoption) 
       solverOptions.generateMSRCSupPix=true
     val DEBUG_COMPARE_MF_FACTORIE =  options.getOrElse("cmpEnergy","false").toBoolean
