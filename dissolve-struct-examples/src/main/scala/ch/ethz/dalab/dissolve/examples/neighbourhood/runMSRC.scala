@@ -38,6 +38,8 @@ import scala.pickling.static._
 import scala.io.Source
 import java.io._
 import scala.util.Random
+import java.awt.image.ColorModel
+import java.awt.Color
  
 
 object runMSRC {
@@ -156,11 +158,234 @@ object runMSRC {
    out
   }
 
+  def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int])={
+    
+    //distFn:((Double,Double)=>Double),sumFn:(Double,Double)=>Double,normFn:(Double,Int)=>Double, //TODO remove me
+     val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
+      val rawImgDir =  imageDataSource  
+      val groundTruthDir = groundTruthDataSource  
+       val lotsofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp")))
+       val lotsofTIF = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tif")))
+       val lotsofTIFF = lotsofTIF ++ Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tiff")))
+       val allFiles =( lotsofTIFF ++ lotsofBMP).flatten.toArray
+       val extension=if(lotsofBMP.isDefined){
+         assert(lotsofTIFF.flatten.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
+         ".bmp"
+       }
+       else if(lotsofTIFF.size>0){
+         assert(!lotsofBMP.isDefined,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
+         ".tif"
+       }
+       else
+         ".tif"
+       
+         
+       
+       val superType = if(isSquare) "_square_" else "_SLIC_"
+
+         val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping2"
+         val colorMapF = new File(colorMapPath)
+       val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[Int,Int]](colorMapPath)  else  new HashMap[Int,Int]()
+       
+       
+       val allData = for( fI <- 0 until allFiles.size) yield {
+        val fName = allFiles(fI)
+        val nameNoExt = fName.substring(0,fName.length()-4)
+        val rawImagePath =  rawImgDir+"/"+ fName
+        
+        val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+S+"_" +runName+".graph2"
+        val maskpath = rawImgDir+"/"+ nameNoExt +superType+ S+"_" +runName+".mask"
+        val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+S+"_" +runName+".ground2"
+        val perPixLabelsPath = groundTruthDir+"/"+nameNoExt+superType+S+"_"+runName+".pxground2"
+        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +superType+S+"_"+runName+".labels2"
+        
+        val cacheMaskF = new File(maskpath)
+        val cacheGraphF = new File(graphCachePath)
+        val cahceLabelsF =  new File(outLabelsPath)
+        var imgSrcBidDepth=(-1)
+        
+        if(cacheGraphF.exists() && cahceLabelsF.exists()){//Check if its cached 
+          
+          val outLabels = GraphUtils.readObjectFromFile[GraphLabels](outLabelsPath)
+          val outGraph =  GraphUtils.readObjectFromFile[GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)]](graphCachePath)
+           new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
+        } 
+        else{
+        println("No cache found for "+nameNoExt+" computing now..")
+        val tStartPre = System.currentTimeMillis()
+        val opener = new Opener();
+        val img = opener.openImage(rawImagePath);
+        val aStack = img.getStack
+        val bitDep = aStack.getBitDepth()
+        if(imgSrcBidDepth==(-1))
+          imgSrcBidDepth=bitDep
+        if(imgSrcBidDepth!=(-1))
+          assert(bitDep==imgSrcBidDepth,"All images need to have the same bitDepth")
+        val isColor = if(bitDep==8) false else true //TODO mabye this is not the best way to check for color in the image 
+        val colMod = aStack.getColorModel()
+        val xDim = aStack.getWidth
+        val yDim = aStack.getHeight
+        val zDim = aStack.getSize
+        
+        
+        
+
+        val copyImage = Array.fill(xDim, yDim, zDim) { 0}
+        for (x <- 0 until xDim; y <- 0 until yDim; z <- 0 until zDim) {
+          copyImage(x)(y)(z) = aStack.getVoxel(x, y, z).asInstanceOf[Int] //TODO this may be causing an inaccuracy on the image color. Question is why is Imagej outputing Doubles.... 
+        }
+        
+         val distFnCol = (a: (Int, Int, Int), b: (Int, Int, Int)) => sqrt(Math.pow(a._1 - b._1, 2) + Math.pow(a._2 - b._2, 2) + Math.pow(a._3 - b._3, 2))
+        val sumFnCol =  (a: (Int, Int, Int), b: (Int, Int, Int)) => ((a._1 + b._1, a._2 + b._2, a._3 + a._3))
+        val normFnCol = (a: (Int, Int, Int), n: Int)             => ((a._1 / n, a._2 / n, a._3 / n))
+
+        val distFn = if(isColor) { 
+          ( a:Int, b:Int) => distFnCol((colMod.getRed(a.asInstanceOf[Int]),colMod.getGreen(a.asInstanceOf[Int]),colMod.getBlue(a.asInstanceOf[Int])),(colMod.getRed(b.asInstanceOf[Int]),colMod.getGreen(b.asInstanceOf[Int]),colMod.getBlue(b.asInstanceOf[Int])))  
+        } else {
+          (a:Int,b:Int)=> sqrt(Math.pow(a-b,2))
+        }
+        
+        val sumFn = if(isColor) 
+          (a:Int,b:Int) => {
+            
+         val c= sumFnCol((colMod.getRed(a),colMod.getGreen(a),colMod.getBlue(a)),(colMod.getRed(b),colMod.getGreen(b),colMod.getBlue(b)))
+         new Color(c._1,c._2,c._3).getRGB() //TODO I bet this is not the same encoding ImageJ uses
+           }else
+          (a:Int,b:Int)=> a+b
+        
+        val normFn = if(isColor)
+          (a:Int,n:Int) => {
+            val c= normFnCol( (colMod.getRed(a.asInstanceOf[Int]),colMod.getGreen(a.asInstanceOf[Int]),colMod.getBlue(a.asInstanceOf[Int])),n)
+            new Color(c._1,c._2,c._3).getRGB()  //TODO I bet this is not the same encoding ImageJ uses
+          }
+          else
+            (a:Int,n:Int) => round(a/n)
+          
+          
+        val allGr =  new SLIC[Int](distFn, sumFn, normFn, copyImage, S, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)   
+        
+        val tMask = System.currentTimeMillis()
+        val mask = if( cacheMaskF.exists())  {
+          GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](maskpath) 
+        } else {
+          if(isSquare)
+             allGr.calcSimpleSquaresSupPix
+          else
+            allGr.calcSuperPixels 
+          }
+        println("Calculate SuperPixels time: "+(System.currentTimeMillis()-tMask))
+        
+          if(!cacheMaskF.exists())
+           GraphUtils.writeObjectToFile(maskpath,mask)//save a chace 
+       
+             val tFindCenter = System.currentTimeMillis()
+         val (supPixCenter, supPixSize) = allGr.findSupPixelCenterOfMassAndSize(mask)
+         println( "Find Center mass time: "+(System.currentTimeMillis()-tFindCenter))
+         val tEdges = System.currentTimeMillis()
+    val edgeMap = allGr.findEdges_simple(mask, supPixCenter)
+    println("Find Graph Connections time: "+(System.currentTimeMillis()-tEdges))
+
+    
+    //TODO create an equivalent test for this V2
+    val keys = supPixCenter.keySet.toList.sorted
+    assert(keys.equals((0 until keys.size).toList),"The Superpixel id counter skipped something "+keys.mkString(","))
   
-  def genMSRCsupPix( numClasses : Int, runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false,S:Int, imageDataSource:String, groundTruthDataSource:String ):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int,Int,Int),Int])={
+      val tFeat = System.currentTimeMillis()
+      
+    val featureVectors = featureFn(aStack,mask)
+    
+      println("Compute Features per Blob: "+(System.currentTimeMillis()-tFeat))
+    val outEdgeMap = edgeMap.map(a => {
+      val oldId = a._1
+      val oldEdges = a._2
+      ((oldId), oldEdges.map { oldEdge => (oldEdge) })
+    })
+    
+    
+    
+    val maxId = max(supPixCenter.keySet)
+    val outNodes = for ( id <- 0 until keys.size) yield{
+      Node(id,Vector(featureVectors.get(id).get) , collection.mutable.Set(outEdgeMap.get(id).get.toSeq:_*))
+        }
+    val outGraph = new GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)](Vector(outNodes.toArray),maskpath) //TODO change the linkCord in graphStruct so it makes sense
+     GraphUtils.writeObjectToFile(graphCachePath,outGraph)    
+  
+     /*
+      * 
+      * 
+      * 
+      */
+     //Construct Ground Truth 
+     val tGround = System.currentTimeMillis()
+        val groundTruthpath =  groundTruthDir+"/"+ nameNoExt+"_GT"+extension
+        val openerGT = new Opener();
+        val imgGT = openerGT.openImage(groundTruthpath);
+        val gtStack = imgGT.getStack
+        assert(xDim==gtStack.getWidth)
+        assert(yDim==gtStack.getHeight)
+        assert(zDim==gtStack.getSize)
+        
+        
+        val labelCount=   if(colorToLabelMap.keySet.size>0) new AtomicInteger(colorToLabelMap.keySet.size) else new AtomicInteger(0)
+      
+        
+        val labelCountsPerS =  Array.fill(keys.size){ new HashMap[Int,Int]()}
+        val topCountPerS =  Array.fill(keys.size){ 0} 
+        val topLabelPerS = Array.fill(keys.size){-1}
+        
+        for ( x <- 0 until xDim; y<- 0 until yDim; z<- 0 until zDim){
+          val spxid = mask(x)(y)(z)
+          val col = gtStack.getVoxel(x,y,z).asInstanceOf[Int]
+          val lab = colorToLabelMap.getOrElse(col, { val newLab = labelCount.getAndIncrement; colorToLabelMap.put(col,newLab); newLab })
+          val lastCount = labelCountsPerS(spxid).getOrElse(lab,0)
+          labelCountsPerS(spxid).put(lab,lastCount+1)
+          if( (lastCount+1)>topCountPerS(spxid)){
+            topCountPerS(spxid)=lastCount+1
+            topLabelPerS(spxid)=lab
+          }
+        }
+          val groundTruthMap =  ( (0 until keys.size) zip topLabelPerS).toMap
+        
+        
+        println("Ground Truth Blob Mapping: "+(System.currentTimeMillis()-tGround))
+         GraphUtils.writeObjectToFile(groundCachePath,groundTruthMap)
+        
+  
+        val labelsInOrder = (0 until groundTruthMap.size).map(a=>groundTruthMap.get(a).get)
+        val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numClasses,groundTruthpath)
+         GraphUtils.writeObjectToFile(outLabelsPath,outLabels)
+         
+         //TODO remove debugging 
+       //  val outError= GraphUtils.lossPerPixel(outGraph.originMapFile, outLabels.originalLabelFile,outLabels,colorMap=colorToLabelMap.toMap)
+         GraphUtils.printBMPFromGraphInt(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
+    
+          
+         println("Total Preprocessing time for "+nameNoExt+" :"+(System.currentTimeMillis()-tStartPre))
+         new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
+        
+       }
+     
+       }
+     
+      assert(colorToLabelMap.size <=numClasses)
+      if(colorToLabelMap.size!=numClasses){
+        println("[WARNING] The input numClasses"+numClasses+" is not equal to the number of distinct colors found in the ground truth "+colorToLabelMap.size)
+      }
+      GraphUtils.writeObjectToFile(colorMapPath,colorToLabelMap)
+      
+      val shuffleIdx = random.shuffle((0 until allData.size).toList)
+      val (trainIDX,testIDX) = if(!doNotSplit) shuffleIdx.splitAt(round(allData.size/2)) else ((0 until allData.size).toList,(0 until allData.size).toList)
+      val  training = trainIDX.map { idx => allData(idx) }.toIndexedSeq
+      val  test = testIDX.map{idx => allData(idx)}.toIndexedSeq
+      return (training,test,colorToLabelMap.toMap)
+  }
+     
+  
+  def genMSRCsupPix( numClasses : Int, runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false,S:Int, imageDataSource:String, groundTruthDataSource:String, randomSeed:Int =(-1)):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int,Int,Int),Int])={
   
   //MSRC_ObjCategImageDatabase_v2
     //msrcSubsetsy
+    val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
       val rawImgDir =  imageDataSource  
       val groundTruthDir = groundTruthDataSource  
        val lotsofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp")))
@@ -386,7 +611,10 @@ object runMSRC {
       }
       GraphUtils.writeObjectToFile(colorMapPath,colorToLabelMap)
       
-      val (training,test) =  if(!doNotSplit) allData.splitAt(round(allData.size/1.5).asInstanceOf[Int]) else (allData,allData)
+      val shuffleIdx = random.shuffle((0 until allData.size).toList)
+      val (trainIDX,testIDX) = if(!doNotSplit) shuffleIdx.splitAt(round(allData.size/2)) else ((0 until allData.size).toList,(0 until allData.size).toList)
+      val  training = trainIDX.map { idx => allData(idx) }.toIndexedSeq
+      val  test = testIDX.map{idx => allData(idx)}.toIndexedSeq
       return (training,test,colorToLabelMap.toMap) 
    }
   
@@ -487,6 +715,8 @@ object runMSRC {
     
     if(solverOptions.dataGenSparsity> 0)
       solverOptions.dataWasGenerated=true
+      
+    solverOptions.inferenceMethod= if(solverOptions.useMF) "MF" else if(solverOptions.useNaiveUnaryMax) "NAIVE_MAX" else "Factorie"
     
     
     
@@ -563,11 +793,51 @@ object runMSRC {
     }
     
    
+      //  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] 
+    //TODO REMOVE DEBUG new method 
+   val histBinsPerCol = 4
+   val histWidt = 255 / histBinsPerCol
+   //BOOKMARK
+   val featFn2 = (image:ImageStack,mask:Array[Array[Array[Int]]])=>{
+      val bitDep = image.getBitDepth()
+        val isColor = if(bitDep==8) false else true //TODO mabye this is not the best way to check for color in the image 
+        val colMod = image.getColorModel()
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
         
+        if(isColor){
+           val redHist = Array.fill(histBinsPerCol) { 0 }
+          val greenHist = (Array.fill(histBinsPerCol) { 0 })
+          val blueHist = (Array.fill(histBinsPerCol) { 0 })
+          
+          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
+            val r = colMod.getRed(col)
+            val g = colMod.getGreen(col)
+            val b = colMod.getBlue(col)
+            redHist(min(histBinsPerCol - 1, (r / histWidt))) += 1
+            greenHist(min(histBinsPerCol - 1, (g / histWidt))) += 1
+            blueHist(min(histBinsPerCol - 1, (b / histWidt))) += 1
+          }
+          val all = List(redHist, greenHist, blueHist).flatten
+          val mySum = all.sum
+          Vector(all.map(a => (a.asInstanceOf[Double] / mySum)).toArray)
+        }
+        else{
+          //BOOKMARK
+          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
+          }
+        }
+        
+        
+   }
+   val (tr2,ts3,cMap2)=  genMSRCsupPixV2(solverOptions.numClasses,solverOptions.superPixelSize,solverOptions.imageDataFilesDir,solverOptions.groundTruthDataFilesDir,featFn2,solverOptions.dbcfwSeed,solverOptions.runName,solverOptions.squareSLICoption,solverOptions.trainTestEqual)
     
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption,solverOptions.trainTestEqual,S=solverOptions.superPixelSize,imageDataSource=solverOptions.imageDataFilesDir,groundTruthDataSource= solverOptions.groundTruthDataFilesDir) }else genSquareNoiseD()
+    val (trainData,testData, colorlabelMap) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption,solverOptions.trainTestEqual,S=solverOptions.superPixelSize,imageDataSource=solverOptions.imageDataFilesDir,groundTruthDataSource= solverOptions.groundTruthDataFilesDir,solverOptions.dbcfwSeed) }else genSquareNoiseD()
    
     println("Train Size:"+trainData.size)
     println("Test Size:"+testData.size)

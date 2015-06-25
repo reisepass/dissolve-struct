@@ -160,6 +160,35 @@ object GraphUtils {
     ImageIO.write(img, "BMP", new File("../data/debug/" + name + ".bmp")); //TODO change this output location
   }
 
+   def printBMPFromGraphInt(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non", colorMap: Map[Int, Int] = null) {
+
+    val mask = readObjectFromFile[Array[Array[Array[Int]]]](graph.originMapFile)
+    //Need to construct a new image.  
+    val xDim = mask.length
+    val yDim = mask(0).length
+
+    val img: BufferedImage = new BufferedImage(xDim, yDim,
+      BufferedImage.TYPE_INT_RGB);
+
+    for (x <- 0 until xDim; y <- 0 until yDim) {
+      val sID = mask(x)(y)(slice3dAt)
+      val myClassPred = labels.d(sID)
+      val myCol = if (colorMap == null) someColors(myClassPred % someColors.length) else {
+        try {
+          colorMap.get(myClassPred).get
+        } catch {
+          case e: Exception =>
+            { println("Error myClassPred:" + myClassPred + " was not found") }
+            return ()
+        }
+      }
+      img.setRGB(x, y, myCol)
+
+    }
+    ImageIO.write(img, "BMP", new File("../data/debug/" + name + ".bmp")); //TODO change this output location
+  }
+
+   
   //TODO find a nice scala-esq way of doing this. essencially i want the matlab function 'squeeze'
   def flatten3rdDim(in: D3ArrInt): Array[Array[Int]] = {
 
