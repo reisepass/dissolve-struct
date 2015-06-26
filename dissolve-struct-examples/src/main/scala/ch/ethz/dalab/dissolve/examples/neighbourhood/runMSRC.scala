@@ -108,13 +108,12 @@ object runMSRC {
         val col =  image.getColorModel
         val binWidth = maxColor/binsPerColor
         val maxBin = (binsPerColor-1)*binsPerColor*binsPerColor+(binsPerColor-1)*binsPerColor+(binsPerColor-1)+1
-        def whichBin(r:Int,g:Int,b:Int):Int={ 
+        def whichBin(r:Int,g:Int,b:Int):Int={
           val rBin = min(r/binWidth,binsPerColor-1)
           val gBin = min(g/binWidth,binsPerColor-1)
           val bBin = min(b/binWidth,binsPerColor-1)
           rBin*(binsPerColor*binsPerColor)+gBin*binsPerColor+bBin
         }
-        //val coOccuranceMaties = new HashMap[Int,Array[Array[Int]]]
         val coOccuranceMaties = (0 until numSuperPix).toList.map { key => (key -> Array.fill(maxBin,maxBin){0}) }.toMap
         val coNormalizingConst = Array.fill(numSuperPix){0.0}
         for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
@@ -130,7 +129,7 @@ object runMSRC {
              val neighBin = whichBin(col.getRed(neighRGB),col.getGreen(neighRGB),col.getBlue(neighRGB))
              coOccuranceMaties.get(supID).get(bin)(neighBin)+=1 //If this throws an error then there must be a super pixel not in (0,numSuperPix]
              coNormalizingConst(supID)+=1.0
-             if(bin!=neighBin)
+             if(bin!=neighBin)  
                coOccuranceMaties.get(supID).get(neighBin)(bin)+=1 //I dont care about direction of the neighbour. Someone could also use negative values in the directions 
            })
            
@@ -157,6 +156,113 @@ object runMSRC {
  
    out
   }
+  
+    def colorhist(image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int):Map[Int,Array[Double]]={
+     val colMod = image.getColorModel()
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
+     val supPixMap = new HashMap[Int,(Array[Int],Array[Int],Array[Int])]
+          
+       //   val redHist = Array.fill(histBinsPerCol) { 0 }
+         // val greenHist = (Array.fill(histBinsPerCol) { 0 })
+          //val blueHist = (Array.fill(histBinsPerCol) { 0 })
+          
+          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+            val lab = mask(x)(y)(z)
+            val refHist = supPixMap.getOrElseUpdate(lab, (Array.fill(histBinsPerCol) { 0 },Array.fill(histBinsPerCol) { 0 },Array.fill(histBinsPerCol) { 0 }))
+            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
+            val r = colMod.getRed(col)
+            val g = colMod.getGreen(col)
+            val b = colMod.getBlue(col)
+            refHist._1(min(histBinsPerCol - 1, (r / histWidt))) += 1
+            refHist._2(min(histBinsPerCol - 1, (g / histWidt))) += 1
+            refHist._3(min(histBinsPerCol - 1, (b / histWidt))) += 1
+        }
+          val keys = supPixMap.keySet.toList.sorted
+          keys.map { key => {
+            val hists = supPixMap.get(key).get
+            val all = List(hists._1,hists._2,hists._3).flatten
+            val mySum = all.sum
+            (key-> all.map(a => (a.asInstanceOf[Double] / mySum)).toArray)
+          }
+          }.toMap 
+          
+   }
+   
+   def greyHist  (image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int):Map[Int,Array[Double]]={
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
+     val supPixMap = new HashMap[Int,Array[Int]]
+         for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+            val lab = mask(x)(y)(z)
+            val refHist = supPixMap.getOrElseUpdate(lab, Array.fill(histBinsPerCol) { 0 })
+            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
+        
+            refHist(min(histBinsPerCol - 1, (col / histWidt))) += 1
+        }
+          val keys = supPixMap.keySet.toList.sorted
+          keys.map { key => {
+            val hist = supPixMap.get(key).get.toList
+            val mySum = hist.sum
+            (key-> hist.map(a => (a.asInstanceOf[Double] / mySum)).toArray)
+          }
+          }.toMap
+    
+        
+   }
+   
+   def greyCoOccurancePerSuper(image:ImageStack,mask:Array[Array[Array[Int]]],histBins:Int,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1))):Map[Int,Array[Double]]={
+        val bitDepth = image.getBitDepth
+        assert(bitDepth==8)//TODO can i generalize this to any bit depth ?
+        val maxAbsValue = (Math.pow(bitDepth,2)/2).asInstanceOf[Int] //Divide by 2 because of sign 
+        val binWidth = maxAbsValue/histBins.asInstanceOf[Double]
+        val whichBin = (a:Int)=>{ (a/binWidth).asInstanceOf[Int]}
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
+        val gCoOcMats = new HashMap[Int,Array[Array[Int]]]
+        val coNormalizingConst = new HashMap[Int,Int]
+           for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+             
+             val lab=mask(x)(y)(z)
+             val myMat = gCoOcMats.getOrElseUpdate(lab, Array.fill(histBins,histBins){0})
+             val myCol=image.getVoxel(x,y,z).asInstanceOf[Int]
+             val myBin = whichBin(myCol)
+             directions.foreach( (dir:(Int,Int,Int))=>{
+               val neighCol = image.getVoxel(x+dir._1,y+dir._2,z+dir._3).asInstanceOf[Int]
+               val neighBin = whichBin(neighCol)
+               val oldZ = coNormalizingConst.getOrElse(lab,0)
+               coNormalizingConst.put(lab,oldZ+1)
+               myMat(myBin)(neighBin)+=1
+               if(myBin!=neighBin)
+                 myMat(neighBin)(myBin)+=1
+               
+             })
+             
+             
+           }
+              //I only need the upper triagular of the matrix since its symetric. Also i want all my features to be vectorized so
+        val n = maxAbsValue
+ val out=gCoOcMats.map( ((pair:(Int,Array[Array[Int]]))=> {
+   val key = pair._1
+   val myCoOccur = pair._2
+   
+        
+        val linFeat = Array.fill((n * (n+1)) / 2){0.0}; 
+    for (r<- 0 until maxAbsValue ; c <- 0 until maxAbsValue)
+    {
+     
+        val i = (n * r) + c-((r * (r+1))/2) 
+        linFeat(i) = myCoOccur(r)(c)/coNormalizingConst(key)
+      
+    }
+ (key,linFeat)
+ })).toMap
+        
+     out
+   }
 
   def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int])={
     
@@ -245,6 +351,20 @@ object runMSRC {
           (a:Int,b:Int)=> sqrt(Math.pow(a-b,2))
         }
         
+        val rollingAvgFn = if(isColor){
+          (a:Int,b:Int,n:Int)=>{
+            val totalSum= sumFnCol((colMod.getRed(a)*n,colMod.getGreen(a)*n,colMod.getBlue(a)*n),(colMod.getRed(b),colMod.getGreen(b),colMod.getBlue(b)))
+            val cAvg = normFnCol(totalSum,n+1)
+            new Color(cAvg._1,cAvg._2,cAvg._3).getRGB()
+          }
+        }
+        else{
+          (a:Int,b:Int,n:Int)=>{
+            val sum = a*n + b
+            (sum/(n+1)).asInstanceOf[Int]
+          }
+        }
+        
         val sumFn = if(isColor) 
           (a:Int,b:Int) => {
             
@@ -262,7 +382,7 @@ object runMSRC {
             (a:Int,n:Int) => round(a/n)
           
           
-        val allGr =  new SLIC[Int](distFn, sumFn, normFn, copyImage, S, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)   
+        val allGr =  new SLIC[Int](distFn, rollingAvgFn, normFn, copyImage, S, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)   
         
         val tMask = System.currentTimeMillis()
         val mask = if( cacheMaskF.exists())  {
@@ -798,40 +918,28 @@ object runMSRC {
    val histBinsPerCol = 4
    val histWidt = 255 / histBinsPerCol
    //BOOKMARK
+   
+ 
+   
    val featFn2 = (image:ImageStack,mask:Array[Array[Array[Int]]])=>{
+     val xDim = mask.length
+     val yDim = mask(0).length
+     val zDim = mask(0)(0).length
+     val numSupPix = mask(xDim-1)(yDim-1)(zDim-1) //TODO is this correct always ?
       val bitDep = image.getBitDepth()
-        val isColor = if(bitDep==8) false else true //TODO mabye this is not the best way to check for color in the image 
-        val colMod = image.getColorModel()
-        val xDim = image.getWidth
-        val yDim = image.getHeight
-        val zDim = image.getSize
+        val isColor = if(bitDep==8) false else true //TODO maybe this is not the best way to check for color in the image
+        //TODO the bit depth should give me the max value which the hist should span over 
         
         if(isColor){
-           val redHist = Array.fill(histBinsPerCol) { 0 }
-          val greenHist = (Array.fill(histBinsPerCol) { 0 })
-          val blueHist = (Array.fill(histBinsPerCol) { 0 })
-          
-          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
-            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
-            val r = colMod.getRed(col)
-            val g = colMod.getGreen(col)
-            val b = colMod.getBlue(col)
-            redHist(min(histBinsPerCol - 1, (r / histWidt))) += 1
-            greenHist(min(histBinsPerCol - 1, (g / histWidt))) += 1
-            blueHist(min(histBinsPerCol - 1, (b / histWidt))) += 1
-          }
-          val all = List(redHist, greenHist, blueHist).flatten
-          val mySum = all.sum
-          Vector(all.map(a => (a.asInstanceOf[Double] / mySum)).toArray)
+          val hist=colorhist(image,mask,histBinsPerCol,255 / histBinsPerCol)
+          val coMat = coOccurancePerSuperRGB(mask, image, numSupPix, histBinsPerCol)
+          hist++coMat
         }
-        else{
-          //BOOKMARK
-          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
-            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
-          }
-        }
-        
-        
+       else{
+          val hist=greyHist(image,mask,histBinsPerCol*3,255 / (histBinsPerCol*3))
+          val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
+          hist++coMat
+       }      
    }
    val (tr2,ts3,cMap2)=  genMSRCsupPixV2(solverOptions.numClasses,solverOptions.superPixelSize,solverOptions.imageDataFilesDir,solverOptions.groundTruthDataFilesDir,featFn2,solverOptions.dbcfwSeed,solverOptions.runName,solverOptions.squareSLICoption,solverOptions.trainTestEqual)
     
