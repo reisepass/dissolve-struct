@@ -60,6 +60,10 @@ class SolverOptions[X, Y] extends Serializable {
   var dataRandSeed= (-1)
   var isColor = true
   var dataSetName ="NONAME"
+  var inferenceMethod="NONAME"
+  var useClassFreqWeighting = false
+  var initWithEmpiricalTransProb= false
+  var initWeight= Array.fill(0){0.0}
   
   var useMSRC = false
   var generateMSRCSupPix = false
@@ -74,7 +78,8 @@ class SolverOptions[X, Y] extends Serializable {
   var useMF=false
   var learningRate = 0.1
   var mfTemp = 5.0
-
+  var weighDownPairwise = 1.0
+  var weighDownUnary = 1.0
   // Cache params
   var enableOracleCache: Boolean = false
   var oracleCacheSize: Int = 10

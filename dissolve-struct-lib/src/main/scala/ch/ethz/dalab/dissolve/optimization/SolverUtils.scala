@@ -119,9 +119,7 @@ object SolverUtils {
        
        
         val ell_s = lossFn(datapoint.label, yStar)
-        if(ell_s >1)
-          println("loss greater than 1 ??")
-          
+      
         (w_s, ell_s)
     }.fold((Vector.zeros[Double](d), 0.0)) {
       case ((w_acc, ell_acc), (w_i, ell_i)) =>

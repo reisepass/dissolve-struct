@@ -37,6 +37,18 @@ import ch.ethz.dalab.dissolve.examples.imageseg.ImageSegmentationUtils
 import java.util.concurrent.atomic.AtomicInteger
 import java.awt.Color
 import ij.io.Opener
+import java.awt.FontMetrics
+import java.awt.Font
+import java.awt.image.BufferedImage;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 
 class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
                                            originalDataMappingFilePath: String) extends Serializable { //dataLink could be a Vector, no reason for hashMap
@@ -160,6 +172,73 @@ object GraphUtils {
     ImageIO.write(img, "BMP", new File("../data/debug/" + name + ".bmp")); //TODO change this output location
   }
 
+  
+  def  printSupPixLabels_Int(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non", colorMap: Map[Int, Int] = null) {
+    
+    
+    val mask = readObjectFromFile[Array[Array[Array[Int]]]](graph.originMapFile)
+    //Need to construct a new image.  
+    val xDim = mask.length
+    val yDim = mask(0).length
+
+    val old: BufferedImage = new BufferedImage(xDim, yDim,
+      BufferedImage.TYPE_INT_RGB);
+
+    
+    val firstPixPerID = new HashMap [Int, (Int,Int)]
+    
+    for (x <- 0 until xDim; y <- 0 until yDim) {
+      val sID = mask(x)(y)(slice3dAt)
+      if(!firstPixPerID.contains(sID))
+        firstPixPerID.put(sID,(x,y))
+      val myClassPred = labels.d(sID)
+      val myCol = if (colorMap == null) someColors(myClassPred % someColors.length) else {
+        try {
+          colorMap.get(myClassPred).get
+        } catch {
+          case e: Exception =>
+            { println("Error myClassPred:" + myClassPred + " was not found") }
+            return ()
+        }
+      }
+      old.setRGB(x, y, myCol)
+
+    }
+    
+    
+    val  w = old.getWidth();
+        val  h = old.getHeight();
+        val img = new BufferedImage(w, h,BufferedImage.TYPE_INT_RGB);
+        
+     val g2d:Graphics2D = img.createGraphics();
+        g2d.drawImage(old, 0, 0, null);
+        g2d.setPaint(Color.black);
+        g2d.setFont(new Font("Serif", Font.PLAIN, 8));
+        
+        
+    firstPixPerID.foreach( a => {
+      val id = a._1
+      val x = a._2._1
+      val y = a._2._2
+      val s = ""+id;
+      g2d.drawString(s, x, y);
+    })
+       g2d.dispose();
+    
+val pw = new PrintWriter(new File("../data/graph/" + name + "sID_graph_.txt"))
+
+    for ( i <- 0 until graph.size){
+      val id = i
+      val neigh = graph.getC(id)
+      
+      pw.write("\n("+id+"-> ["+neigh.toList.mkString(",")+"] ")
+    }
+         ImageIO.write(img, "BMP", new File("../data/graph/" + name + "sID_.bmp")); //TODO change this output location
+        
+        pw.close 
+   
+  }
+  
    def printBMPFromGraphInt(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non", colorMap: Map[Int, Int] = null) {
 
     val mask = readObjectFromFile[Array[Array[Array[Int]]]](graph.originMapFile)
@@ -281,6 +360,33 @@ object GraphUtils {
     return (eachLoss.sum / eachLoss.length)
   }
 
+  //Colormap should be (int,int) (color found in ground truth image, internal label represetnation)
+   def lossPerPixelInt(superPixelMapping: String, originalTrue: String, prediction: GraphLabels, lossFn: (Int, Int) => Double = (a: Int, b: Int) => { if (a == b) 0.0 else 1.0 }, colorMap: Map[Int, Int]): Double = {
+    assert(!originalTrue.equals("None"))
+    val supPixToOrig = readObjectFromFile[Array[Array[Array[Int]]]](superPixelMapping)
+
+    val openerGT = new Opener();
+    val imgGT = openerGT.openImage(originalTrue);
+    val gtStack = imgGT.getStack
+    val gtColMod = gtStack.getColorModel
+
+    val xDim = supPixToOrig.length
+    val yDim = supPixToOrig(0).length
+    val zDim = supPixToOrig(0)(0).length
+    assert(xDim == gtStack.getWidth)
+    assert(yDim == gtStack.getHeight)
+    assert(zDim == gtStack.getSize)
+
+    val eachLoss = for (x <- 0 until xDim; y <- 0 until yDim; z <- 0 until zDim) yield {
+      val trueLabelColor = gtStack.getVoxel(x, y, z).asInstanceOf[Int]
+      val trueLabel = colorMap.get(trueLabelColor).get
+      val requiredSuperPixelID = supPixToOrig(x)(y)(z)
+      val predictedLabel = prediction.d(requiredSuperPixelID)
+      lossFn(trueLabel, predictedLabel)
+    }
+    return (eachLoss.sum / eachLoss.length)
+  }
+   
   val convertMSRC_counter = new AtomicInteger(0)
   def convertOT_msrc_toGraph(xi: DenseMatrix[ROIFeature], yi: DenseMatrix[ROILabel], numClasses: Int): (GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels) = {
 

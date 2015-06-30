@@ -87,7 +87,15 @@ class DBCFWSolverTuned[X, Y](
     val d: Int = dissolveFunctions.featureFn(samplePoint.pattern, samplePoint.label).size
     // Let the initial model contain zeros for all weights
     // Global model uses Dense Vectors by default
-    var globalModel: StructSVMModel[X, Y] = new StructSVMModel[X, Y](DenseVector.zeros(d), 0.0,
+    
+    if(solverOptions.initWithEmpiricalTransProb){
+      
+      val tmp =DenseVector(solverOptions.initWeight)
+      print("##Using Init Weight: "+tmp)
+    }
+    
+    
+    var globalModel: StructSVMModel[X, Y] = new StructSVMModel[X, Y]( if(solverOptions.initWithEmpiricalTransProb) DenseVector(solverOptions.initWeight) else DenseVector.zeros(d), 0.0,
       DenseVector.zeros(d), dissolveFunctions, solverOptions.numClasses)
 
     val numPartitions: Int =
@@ -246,9 +254,10 @@ class DBCFWSolverTuned[X, Y](
         }
           //assert(dualityGap>0)
         
-        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s"
+        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d"
         .format(solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
-            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f" ,if(solverOptions.squareSLICoption) "t" else "f" , solverOptions.superPixelSize, solverOptions.dataSetName, if(solverOptions.trainTestEqual)"t" else "f"))
+            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f" ,if(solverOptions.squareSLICoption) "t" else "f" , solverOptions.superPixelSize, solverOptions.dataSetName, if(solverOptions.trainTestEqual)"t" else "f",
+            solverOptions.inferenceMethod,solverOptions.dbcfwSeed))
         //TODO need to add expID tag, maybe git Version 
         
         

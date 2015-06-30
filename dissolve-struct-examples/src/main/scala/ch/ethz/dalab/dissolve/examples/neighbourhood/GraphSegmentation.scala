@@ -27,11 +27,10 @@ import ch.ethz.dalab.dissolve.classification.StructSVMModel
 import ch.ethz.dalab.dissolve.classification.StructSVMWithDBCFW
 import ch.ethz.dalab.dissolve.optimization.DissolveFunctions
 import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
-import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName") extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -81,7 +80,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val pairwiseMat = DenseMatrix.zeros[Double](yi.numClasses, yi.numClasses)
     for (idx <- 0 until xi.size) {
       val myLabel = yi.d(idx)
-      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour)) += 1 } }
+      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour)) += 1} }
     }
     pairwiseMat
   }
@@ -95,8 +94,9 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
         idx <- 0 until yPredict.d.size
       ) yield {
         //TODO put this back to weighted loss 
-        //if (yTruth.get(x, y, z) == yPredict.get(x, y, z)) 0.0 else 1.0 / classFreqs.get(yTruth.get(x, y, z)).get // Insert classFrequency back into the truthObject
-        if (yTruth.d(idx) == yPredict.d(idx)) 0.0 else 1.0 // Insert classFrequency back into the truthObject
+        val classLossWeight = if(classFreqs==null) 1 else classFreqs.get(yTruth.d(idx)).get
+        // if (yTruth.get(x, y, z) == yPredict.get(x, y, z)) 0.0 else 1.0 / classFreqs.get(yTruth.get(x, y, z)).get // Insert classFrequency back into the truthObject
+        if (yTruth.d(idx) == yPredict.d(idx)) 0.0 else 1.0/classLossWeight // Insert classFrequency back into the truthObject
       }
 
     loss.sum / (yPredict.d.size)
@@ -130,7 +130,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val nodePairsUsed: HashSet[(Int, Int)] = new HashSet[(Int, Int)]()
     for (idx <- 0 until labelParams.length) {
       model ++= new Factor1(labelParams(idx)) {
-        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)
+        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)*weighDownUnary
       }
 
       if (!DISABLE_PAIRWISE) {
@@ -140,7 +140,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
             if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
               nodePairsUsed.add((idx, neighbour))
               model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
-                def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)
+                def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)*weighDownPairwise
               }
             }
           }
@@ -148,7 +148,8 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       }
     }
 
-     // println("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
+   
+    if(counter<1) println("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
     val maxIterations = MAX_DECODE_ITERATIONS
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
@@ -165,6 +166,12 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
   var counter =0; //TODO REMOVE 
   var lastHash:Int=0;
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
+    
+    
+    
+    
+    
+    
     val thisyiHash= if(yi!=null) yi.hashCode else 0
     val numClasses = model.numClasses
 
@@ -188,6 +195,24 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
     val thetaPairwise = pairwiseWeights
 
+    
+    if(counter<1){
+      println("-------------Pairwise_Mat-------------")
+      print("Diagonal: [[")
+      for(i <- 0 until thetaPairwise.rows ){
+        print("\t,%.3f".format(thetaPairwise(i,i)))
+      }
+      print("]]\n\n")
+      
+        for(r<- 0 until thetaPairwise.rows ){
+          for( c<- 0 until thetaPairwise.cols){
+          print("\t,%.3f".format(thetaPairwise(r,c)))
+        }
+          print("\n")
+      }
+      
+    }
+    
     // If yi is present, do loss-augmentation
     if (yi != null) {
       for (idx <- 0 until xi.size) { //TODO check if this is using correct indexs 
@@ -247,6 +272,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     
     }
    
+    
     
     
     val decodeTimeMillis = System.currentTimeMillis() - startTime

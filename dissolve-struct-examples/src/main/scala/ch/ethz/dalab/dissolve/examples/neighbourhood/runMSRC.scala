@@ -95,13 +95,13 @@ object runMSRC {
     }
     imp2_pix.setStack(aStack_supPix)
     //imp2_pix.show()
-    IJ.saveAs(imp2_pix, "bmp", "/home/mort/workspace/Scala-SLIC-Superpixel/ScalaSLIC/data/" + label + "_seg.bmp"); //TODO this should not be hardcoded 
+    IJ.saveAs(imp2_pix, "bmp", "/home/mort/workspace/dissolve-struct/data/supPixImages/" + label + "_seg.bmp"); //TODO this should not be hardcoded 
     //TODO free this memory after saving 
   }
 
   
-  def coOccurancePerSuperRGB( mask:Array[Array[Array[Int]]], image: ImageStack, numSuperPix:Int,binsPerColor:Int=3,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1))):Map[Int,Array[Double]]={
-        val maxColor = 255
+  def coOccurancePerSuperRGB( mask:Array[Array[Array[Int]]], image: ImageStack, numSuperPix:Int,binsPerColor:Int=3,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1)), maxColorValue:Int=255):Map[Int,Array[Double]]={
+        val maxColor = maxColorValue 
         val xDim = image.getWidth
         val yDim = image.getHeight
         val zDim = image.getSize
@@ -114,8 +114,11 @@ object runMSRC {
           val bBin = min(b/binWidth,binsPerColor-1)
           rBin*(binsPerColor*binsPerColor)+gBin*binsPerColor+bBin
         }
-        val coOccuranceMaties = (0 until numSuperPix).toList.map { key => (key -> Array.fill(maxBin,maxBin){0}) }.toMap
-        val coNormalizingConst = Array.fill(numSuperPix){0.0}
+        val fillCont = (0 until numSuperPix).toList.map { key => (key -> Array.fill(maxBin,maxBin){0}) }.toMap
+        val coOccuranceMaties= new HashMap[Int,Array[Array[Int]]]
+        coOccuranceMaties++fillCont
+        
+        val coNormalizingConst = new HashMap[Int,Double]++((0 until numSuperPix).map(key => (key -> 0.0)).toMap)
         for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
            val supID = mask(x)(y)(z)
            val rgb= image.getVoxel(x,y,z).asInstanceOf[Int]
@@ -123,10 +126,14 @@ object runMSRC {
            val g=col.getGreen(rgb)
            val b=col.getBlue(rgb)
            val bin = whichBin(r,g,b)
-           
+           if(!coOccuranceMaties.contains(supID)){
+             coOccuranceMaties.put(supID,Array.fill(maxBin,maxBin){0})
+             coNormalizingConst.put(supID,0.0)
+           }
            directions.foreach( (el:(Int,Int,Int))=>{
              val neighRGB = image.getVoxel(x+el._1,y+el._2,z+el._3).asInstanceOf[Int]
              val neighBin = whichBin(col.getRed(neighRGB),col.getGreen(neighRGB),col.getBlue(neighRGB))
+            
              coOccuranceMaties.get(supID).get(bin)(neighBin)+=1 //If this throws an error then there must be a super pixel not in (0,numSuperPix]
              coNormalizingConst(supID)+=1.0
              if(bin!=neighBin)  
@@ -157,7 +164,7 @@ object runMSRC {
    out
   }
   
-    def colorhist(image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int):Map[Int,Array[Double]]={
+    def colorhist(image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int, maxColorValue:Int=255):Map[Int,Array[Double]]={
      val colMod = image.getColorModel()
         val xDim = image.getWidth
         val yDim = image.getHeight
@@ -190,7 +197,7 @@ object runMSRC {
           
    }
    
-   def greyHist  (image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int):Map[Int,Array[Double]]={
+   def greyHist  (image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int, maxColorValue:Int=255):Map[Int,Array[Double]]={
         val xDim = image.getWidth
         val yDim = image.getHeight
         val zDim = image.getSize
@@ -213,10 +220,12 @@ object runMSRC {
         
    }
    
-   def greyCoOccurancePerSuper(image:ImageStack,mask:Array[Array[Array[Int]]],histBins:Int,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1))):Map[Int,Array[Double]]={
+   def greyCoOccurancePerSuper(image:ImageStack,mask:Array[Array[Array[Int]]],histBins:Int,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1)), maxColorValue:Int=255):Map[Int,Array[Double]]={
         val bitDepth = image.getBitDepth
         assert(bitDepth==8)//TODO can i generalize this to any bit depth ?
-        val maxAbsValue = (Math.pow(bitDepth,2)/2).asInstanceOf[Int] //Divide by 2 because of sign 
+        val maxAbsValue = maxColorValue //Divide by 2 because of sign 
+        //TODO this is most likely wrong 
+        
         val binWidth = maxAbsValue/histBins.asInstanceOf[Double]
         val whichBin = (a:Int)=>{ (a/binWidth).asInstanceOf[Int]}
         val xDim = image.getWidth
@@ -243,15 +252,15 @@ object runMSRC {
              
              
            }
-              //I only need the upper triagular of the matrix since its symetric. Also i want all my features to be vectorized so
-        val n = maxAbsValue
- val out=gCoOcMats.map( ((pair:(Int,Array[Array[Int]]))=> {
+   //I only need the upper triagular of the matrix since its symetric. Also i want all my features to be vectorized so
+   val n = histBins
+   val out=gCoOcMats.map( ((pair:(Int,Array[Array[Int]]))=> {
    val key = pair._1
    val myCoOccur = pair._2
    
         
         val linFeat = Array.fill((n * (n+1)) / 2){0.0}; 
-    for (r<- 0 until maxAbsValue ; c <- 0 until maxAbsValue)
+    for (r<- 0 until n ; c <- 0 until n)
     {
      
         val i = (n * r) + c-((r * (r+1))/2) 
@@ -264,7 +273,7 @@ object runMSRC {
      out
    }
 
-  def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int])={
+  def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
     
     //distFn:((Double,Double)=>Double),sumFn:(Double,Double)=>Double,normFn:(Double,Int)=>Double, //TODO remove me
      val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
@@ -274,12 +283,12 @@ object runMSRC {
        val lotsofTIF = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tif")))
        val lotsofTIFF = lotsofTIF ++ Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tiff")))
        val allFiles =( lotsofTIFF ++ lotsofBMP).flatten.toArray
-       val extension=if(lotsofBMP.isDefined){
+       val extension=if(lotsofBMP.get.size>0 ){
          assert(lotsofTIFF.flatten.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
          ".bmp"
        }
        else if(lotsofTIFF.size>0){
-         assert(!lotsofBMP.isDefined,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
+         assert(lotsofBMP.get.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
          ".tif"
        }
        else
@@ -291,9 +300,19 @@ object runMSRC {
 
          val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping2"
          val colorMapF = new File(colorMapPath)
-       val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[Int,Int]](colorMapPath)  else  new HashMap[Int,Int]()
-       
-       
+         val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[Int,Int]](colorMapPath)  else  new HashMap[Int,Int]()
+         val classCountPath = rawImgDir+"/classCountMap"+superType+S+"_" +runName+".classCount"
+         val classCountF = new File(classCountPath)
+         val oldClassCountFound = classCountF.exists()
+         val totalClassCount = if(oldClassCountFound) GraphUtils.readObjectFromFile[HashMap[Int,Double]](classCountPath) else new HashMap[Int,Double]()
+     
+         val transProbPath = rawImgDir+"/transitionProbabilityMatrix"+superType+S+"_" +runName+".transProb"
+         val transProbF = new File(transProbPath)
+         val transProbFound = transProbF.exists()
+         val transProb = if(transProbFound) GraphUtils.readObjectFromFile[Array[Array[Double]]](transProbPath) else Array.fill(numClasses,numClasses){0.0}
+         var totalConn= if(transProbFound) 1.0 else 0.0
+         
+         
        val allData = for( fI <- 0 until allFiles.size) yield {
         val fName = allFiles(fI)
         val nameNoExt = fName.substring(0,fName.length()-4)
@@ -309,6 +328,8 @@ object runMSRC {
         val cacheGraphF = new File(graphCachePath)
         val cahceLabelsF =  new File(outLabelsPath)
         var imgSrcBidDepth=(-1)
+        
+
         
         if(cacheGraphF.exists() && cahceLabelsF.exists()){//Check if its cached 
           
@@ -337,13 +358,22 @@ object runMSRC {
         
 
         val copyImage = Array.fill(xDim, yDim, zDim) { 0}
+        var largest = 0;
+        var smallest = 0;
         for (x <- 0 until xDim; y <- 0 until yDim; z <- 0 until zDim) {
-          copyImage(x)(y)(z) = aStack.getVoxel(x, y, z).asInstanceOf[Int] //TODO this may be causing an inaccuracy on the image color. Question is why is Imagej outputing Doubles.... 
+          copyImage(x)(y)(z) = aStack.getVoxel(x, y, z).asInstanceOf[Int] //TODO this may be causing an inaccuracy on the image color. Question is why is Imagej outputing Doubles....
+          if(copyImage(x)(y)(z)>largest)
+            largest=copyImage(x)(y)(z)
+          if(copyImage(x)(y)(z)<smallest)
+            smallest = copyImage(x)(y)(z)
         }
         
-         val distFnCol = (a: (Int, Int, Int), b: (Int, Int, Int)) => sqrt(Math.pow(a._1 - b._1, 2) + Math.pow(a._2 - b._2, 2) + Math.pow(a._3 - b._3, 2))
+        val distFnCol = (a: (Int, Int, Int), b: (Int, Int, Int)) => sqrt(Math.pow(a._1 - b._1, 2) + Math.pow(a._2 - b._2, 2) + Math.pow(a._3 - b._3, 2))
         val sumFnCol =  (a: (Int, Int, Int), b: (Int, Int, Int)) => ((a._1 + b._1, a._2 + b._2, a._3 + a._3))
-        val normFnCol = (a: (Int, Int, Int), n: Int)             => ((a._1 / n, a._2 / n, a._3 / n))
+        val normFnCol = (a: (Int, Int, Int), n: Int)             => {
+          
+                   
+          ((a._1 / n, a._2 / n, a._3 / n))}
 
         val distFn = if(isColor) { 
           ( a:Int, b:Int) => distFnCol((colMod.getRed(a.asInstanceOf[Int]),colMod.getGreen(a.asInstanceOf[Int]),colMod.getBlue(a.asInstanceOf[Int])),(colMod.getRed(b.asInstanceOf[Int]),colMod.getGreen(b.asInstanceOf[Int]),colMod.getBlue(b.asInstanceOf[Int])))  
@@ -353,8 +383,9 @@ object runMSRC {
         
         val rollingAvgFn = if(isColor){
           (a:Int,b:Int,n:Int)=>{
-            val totalSum= sumFnCol((colMod.getRed(a)*n,colMod.getGreen(a)*n,colMod.getBlue(a)*n),(colMod.getRed(b),colMod.getGreen(b),colMod.getBlue(b)))
-            val cAvg = normFnCol(totalSum,n+1)
+            
+            val totalSum= sumFnCol((colMod.getRed(a)*(n-1),colMod.getGreen(a)*(n-1),colMod.getBlue(a)*(n-1)),(colMod.getRed(b),colMod.getGreen(b),colMod.getBlue(b)))
+            val cAvg = normFnCol(totalSum,n)
             new Color(cAvg._1,cAvg._2,cAvg._3).getRGB()
           }
         }
@@ -394,7 +425,7 @@ object runMSRC {
             allGr.calcSuperPixels 
           }
         println("Calculate SuperPixels time: "+(System.currentTimeMillis()-tMask))
-        
+        printSuperPixels(mask,img,300,"_supPix_"+fI)//TODO remove me 
           if(!cacheMaskF.exists())
            GraphUtils.writeObjectToFile(maskpath,mask)//save a chace 
        
@@ -405,6 +436,8 @@ object runMSRC {
     val edgeMap = allGr.findEdges_simple(mask, supPixCenter)
     println("Find Graph Connections time: "+(System.currentTimeMillis()-tEdges))
 
+    
+    
     
     //TODO create an equivalent test for this V2
     val keys = supPixCenter.keySet.toList.sorted
@@ -463,6 +496,12 @@ object runMSRC {
             topCountPerS(spxid)=lastCount+1
             topLabelPerS(spxid)=lab
           }
+          
+          if(!oldClassCountFound){
+            val oldC = totalClassCount.getOrElse(lab,0.0)
+            totalClassCount.put(lab,oldC+1.0)
+          }
+            
         }
           val groundTruthMap =  ( (0 until keys.size) zip topLabelPerS).toMap
         
@@ -470,14 +509,33 @@ object runMSRC {
         println("Ground Truth Blob Mapping: "+(System.currentTimeMillis()-tGround))
          GraphUtils.writeObjectToFile(groundCachePath,groundTruthMap)
         
-  
+   
+         
+         
         val labelsInOrder = (0 until groundTruthMap.size).map(a=>groundTruthMap.get(a).get)
         val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numClasses,groundTruthpath)
          GraphUtils.writeObjectToFile(outLabelsPath,outLabels)
          
+              if(!transProbFound){
+            
+            edgeMap.foreach((a:(Int,Set[Int]))=>{
+              val leftN = a._1
+              val leftClass = labelsInOrder(leftN)
+              val neigh = a._2
+             
+              neigh.foreach { thisNeigh => {
+                val rightClass = labelsInOrder(thisNeigh)
+                transProb(leftClass)(rightClass)+=1.0
+                transProb(rightClass)(leftClass)+=1.0
+                totalConn+=2.0
+              } }
+            })
+            
+          }
+         
          //TODO remove debugging 
-       //  val outError= GraphUtils.lossPerPixel(outGraph.originMapFile, outLabels.originalLabelFile,outLabels,colorMap=colorToLabelMap.toMap)
-         GraphUtils.printBMPFromGraphInt(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
+        GraphUtils.printSupPixLabels_Int(outGraph,outLabels,0,nameNoExt+"_"+"_idMap_",colorMap=colorToLabelMap.toMap.map(_.swap))
+        // GraphUtils.printBMPFromGraphInt(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
     
           
          println("Total Preprocessing time for "+nameNoExt+" :"+(System.currentTimeMillis()-tStartPre))
@@ -486,21 +544,44 @@ object runMSRC {
        }
      
        }
+     //loss greater than 1
      
-      assert(colorToLabelMap.size <=numClasses)
+      assert(colorToLabelMap.size ==numClasses)
       if(colorToLabelMap.size!=numClasses){
         println("[WARNING] The input numClasses"+numClasses+" is not equal to the number of distinct colors found in the ground truth "+colorToLabelMap.size)
       }
       GraphUtils.writeObjectToFile(colorMapPath,colorToLabelMap)
       
+      val classFreq = if(!oldClassCountFound){
+        val totalSupP = totalClassCount.values.sum 
+        val classFreq = totalClassCount.map( (a:(Int,Double))=>{
+          a._1 -> a._2/totalSupP
+        })
+        GraphUtils.writeObjectToFile(classCountPath,classFreq)
+        classFreq
+      }
+      else
+        totalClassCount
+        
+      val outTransProb = if(transProbFound) transProb else {
+        assert(totalConn>0.0)
+        for( l <- 0 until numClasses; r<- 0 until numClasses){
+        transProb(l)(r)=transProb(l)(r)/totalConn
+      }
+          GraphUtils.writeObjectToFile(transProbPath,transProb)
+        transProb
+      }
+   
       val shuffleIdx = random.shuffle((0 until allData.size).toList)
       val (trainIDX,testIDX) = if(!doNotSplit) shuffleIdx.splitAt(round(allData.size/2)) else ((0 until allData.size).toList,(0 until allData.size).toList)
       val  training = trainIDX.map { idx => allData(idx) }.toIndexedSeq
       val  test = testIDX.map{idx => allData(idx)}.toIndexedSeq
-      return (training,test,colorToLabelMap.toMap)
+       println("First Image has "+training(0).pattern.size +" superPixels")
+      return (training,test,colorToLabelMap.toMap,classFreq.toMap,outTransProb)
   }
      
   
+  /*
   def genMSRCsupPix( numClasses : Int, runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false,S:Int, imageDataSource:String, groundTruthDataSource:String, randomSeed:Int =(-1)):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int,Int,Int),Int])={
   
   //MSRC_ObjCategImageDatabase_v2
@@ -737,7 +818,7 @@ object runMSRC {
       val  test = testIDX.map{idx => allData(idx)}.toIndexedSeq
       return (training,test,colorToLabelMap.toMap) 
    }
-  
+  */
   
   
   def main(args: Array[String]): Unit = {
@@ -802,7 +883,7 @@ object runMSRC {
 
     solverOptions.enableOracleCache = options.getOrElse("enableoracle", "false").toBoolean
     solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
-
+    solverOptions.useClassFreqWeighting =  options.getOrElse("weightedClassFreq","false").toBoolean
     solverOptions.useMF=options.getOrElse("useMF","false").toBoolean
     solverOptions.useNaiveUnaryMax = options.getOrElse("useNaiveUnaryMax","false").toBoolean
     solverOptions.learningRate = options.getOrElse("learningRate","0.1").toDouble
@@ -823,12 +904,17 @@ object runMSRC {
     val GEN_NEW_SQUARE_DATA=options.getOrElse("GEN_NEW_SQUARE_DATA","false").toBoolean
     solverOptions.isColor = options.getOrElse("isColor","true").toBoolean
     solverOptions.superPixelSize = options.getOrElse("S","15").toInt
+    solverOptions.initWithEmpiricalTransProb = options.getOrElse("initTransProb","false").toBoolean
     solverOptions.dataFilesDir = options.getOrElse("dataDir","###")
     assert(!solverOptions.dataFilesDir.equals("###"),"Error,  Please specify a the 'dataDir' paramater")
     val tmpDir = solverOptions.dataFilesDir.split("/")
     solverOptions.dataSetName = tmpDir(tmpDir.length-1)
     solverOptions.imageDataFilesDir = options.getOrElse("imageDir",  solverOptions.dataFilesDir+"/Images")
     solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",  solverOptions.dataFilesDir+"/GroundTruth")
+    solverOptions.weighDownPairwise = options.getOrElse("weighDownPairwise","1.0").toDouble
+    assert(solverOptions.weighDownPairwise<=1.0 &&solverOptions.weighDownPairwise>=0)
+    solverOptions.weighDownUnary = options.getOrElse("weighDownUnary","1.0").toDouble
+    assert(solverOptions.weighDownUnary<=1.0&&solverOptions.weighDownUnary>=0)
     if(solverOptions.squareSLICoption) 
       solverOptions.generateMSRCSupPix=true
     val DEBUG_COMPARE_MF_FACTORIE =  options.getOrElse("cmpEnergy","false").toBoolean
@@ -865,7 +951,7 @@ object runMSRC {
     if(GEN_NEW_SQUARE_DATA){
            val lotsofBMP = Option(new File(solverOptions.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
            assert(lotsofBMP.isEmpty,"You tried to create new data into a folder which has alreayd been used for a previous dataset")
-        GraphUtils.genColorfullSquaresDataSuperNoise(50,150,30,0.75,3,0.85,0.2,solverOptions.dataFilesDir,solverOptions.dataRandSeed)
+        GraphUtils.genColorfullSquaresDataSuperNoise(50,150,50,0.3333333,solverOptions.numClasses,0.55,0.15,solverOptions.dataFilesDir,solverOptions.dataRandSeed)
     }
     
     val runCFG=Option(new File(solverOptions.dataFilesDir+"/"+solverOptions.runName+"_run.cfg")).get
@@ -925,7 +1011,7 @@ object runMSRC {
      val xDim = mask.length
      val yDim = mask(0).length
      val zDim = mask(0)(0).length
-     val numSupPix = mask(xDim-1)(yDim-1)(zDim-1) //TODO is this correct always ?
+     val numSupPix = mask(xDim-1)(yDim-1)(zDim-1)+5 //TODO is this correct always ?
       val bitDep = image.getBitDepth()
         val isColor = if(bitDep==8) false else true //TODO maybe this is not the best way to check for color in the image
         //TODO the bit depth should give me the max value which the hist should span over 
@@ -941,14 +1027,28 @@ object runMSRC {
           hist++coMat
        }      
    }
-   val (tr2,ts3,cMap2)=  genMSRCsupPixV2(solverOptions.numClasses,solverOptions.superPixelSize,solverOptions.imageDataFilesDir,solverOptions.groundTruthDataFilesDir,featFn2,solverOptions.dbcfwSeed,solverOptions.runName,solverOptions.squareSLICoption,solverOptions.trainTestEqual)
+  // val (tr2,ts3,cMap2)=  genMSRCsupPixV2(solverOptions.numClasses,solverOptions.superPixelSize,solverOptions.imageDataFilesDir,solverOptions.groundTruthDataFilesDir,featFn2,solverOptions.dbcfwSeed,solverOptions.runName,solverOptions.squareSLICoption,solverOptions.trainTestEqual)
     
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap) = if(solverOptions.useMSRC) getMSRC() else if(solverOptions.generateMSRCSupPix) {genMSRCsupPix(solverOptions.numClasses,solverOptions.runName,isSquare=solverOptions.squareSLICoption,solverOptions.trainTestEqual,S=solverOptions.superPixelSize,imageDataSource=solverOptions.imageDataFilesDir,groundTruthDataSource= solverOptions.groundTruthDataFilesDir,solverOptions.dbcfwSeed) }else genSquareNoiseD()
+    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(solverOptions.numClasses, solverOptions.superPixelSize, solverOptions.imageDataFilesDir, solverOptions.groundTruthDataFilesDir, featFn2, solverOptions.dbcfwSeed, solverOptions.runName, solverOptions.squareSLICoption, solverOptions.trainTestEqual) 
    
+    
+    
+    
     println("Train Size:"+trainData.size)
     println("Test Size:"+testData.size)
+    
+    
+    
+     if(solverOptions.initWithEmpiricalTransProb){
+      val featureSize =trainData(0).pattern.getF(0).size
+      val unaryWeight =Array.fill(solverOptions.numClasses*featureSize){0.0}
+      val pairwiseWeight =  (new DenseVector(transProb.flatten)):/(10.0)
+      val initWeight = unaryWeight++pairwiseWeight.toArray
+      solverOptions.initWeight=initWeight
+     }
+      
     
     
     /*
@@ -995,7 +1095,9 @@ object runMSRC {
 
         val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS,
             solverOptions.learningRate ,solverOptions.useMF,solverOptions.mfTemp,solverOptions.useNaiveUnaryMax,
-            DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,solverOptions.runName)
+            DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,solverOptions.runName,
+            if(solverOptions.useClassFreqWeighting) classFreqFound else null,
+            solverOptions.weighDownUnary,solverOptions.weighDownPairwise)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,
@@ -1008,7 +1110,7 @@ object runMSRC {
     var avgTrainLoss = 0.0
     var avgPerPixTrainLoss = 0.0
     var count=0
-    val invColorMap = colorlabelMap.toMap.map(_.swap)
+    val invColorMap = colorlabelMap.map(_.swap)
     
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)
@@ -1029,8 +1131,8 @@ object runMSRC {
         val fileName = fileNameExt(0)
         
         val tPrint = System.currentTimeMillis()
-        GraphUtils.printBMPFromGraph(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"_train_predict",colorMap=invColorMap)
-        GraphUtils.printBMPFromGraph(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"_train_true",colorMap=invColorMap)
+        GraphUtils.printBMPFromGraphInt(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"-train_predict",colorMap=invColorMap)
+        GraphUtils.printBMPFromGraphInt(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"-train_true",colorMap=invColorMap)
        
         //val supPixToOrig = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.pattern.originMapFile)
         //val origTrueLabel = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.label.originalLabelFile)
@@ -1039,7 +1141,7 @@ object runMSRC {
      
      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction) //TODO change this so that it tests the original pixel labels 
      val tFindLoss = System.currentTimeMillis()
-     avgPerPixTrainLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
+     avgPerPixTrainLoss +=  GraphUtils.lossPerPixelInt(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
    //  println("PerPixel loss counting"+(System.currentTimeMillis()-tFindLoss))
       count+=1
     }
@@ -1094,7 +1196,7 @@ object runMSRC {
         */
       }
      
-      avgPerPixTestLoss +=  GraphUtils.lossPerPixel(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
+      avgPerPixTestLoss +=  GraphUtils.lossPerPixelInt(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
       avgTestLoss += myGraphSegObj.lossFn(item.label, prediction)
       val perLabel = lossPerLabel(item.label, prediction)
       labelOccurance+=perLabel._1
@@ -1110,6 +1212,7 @@ object runMSRC {
     println("labelIncorrectlyUsed: \t"+labelIncorrectlyUsed)
     println("labelNotRecog:        \t"+labelNotRecog)
     println("Label to Color Mapping "+colorlabelMap)
+    println("Internal Class Freq:  \t"+classFreqFound)
     println("#EndScore#,%d,%s,%s,%d,%.3f,%.3f,%s,%d,%d,%.3f,%s,%d,%d,%s,%s,%d,%s,%f,%f,%d,%s,%s,%.3f,%.3f,%s,%s".format(
         solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,(t1MTrain-t0MTrain),solverOptions.dataGenSparsity,solverOptions.dataAddedNoise,if(solverOptions.dataNoiseOnlyTest)"t"else"f",solverOptions.dataGenTrainSize,solverOptions.dataGenCanvasSize,solverOptions.learningRate,if(solverOptions.useMF)"t"else"f",solverOptions.numClasses,MAX_DECODE_ITERATIONS,if(solverOptions.onlyUnary)"t"else"f",if(solverOptions.debug)"t"else"f",solverOptions.roundLimit,if(solverOptions.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,solverOptions.dataRandSeed , if(solverOptions.useMSRC) "t" else "f", if(solverOptions.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(solverOptions.trainTestEqual)"t" else "f" , solverOptions.dataSetName ) )
         
