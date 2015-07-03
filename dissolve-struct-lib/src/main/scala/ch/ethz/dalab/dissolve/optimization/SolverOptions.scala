@@ -64,7 +64,8 @@ class SolverOptions[X, Y] extends Serializable {
   var useClassFreqWeighting = false
   var initWithEmpiricalTransProb= false
   var initWeight= Array.fill(0){0.0}
-  
+  var LOSS_AUGMENTATION_OVERRIDE = false
+  var putLabelIntoFeat = false
   var useMSRC = false
   var generateMSRCSupPix = false
   var squareSLICoption=false
