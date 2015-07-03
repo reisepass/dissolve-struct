@@ -95,7 +95,7 @@ object runMSRC {
     }
     imp2_pix.setStack(aStack_supPix)
     //imp2_pix.show()
-    IJ.saveAs(imp2_pix, "bmp", "/home/mort/workspace/dissolve-struct/data/supPixImages/" + label + "_seg.bmp"); //TODO this should not be hardcoded 
+    IJ.saveAs(imp2_pix, "tif", "/home/mort/workspace/dissolve-struct/data/supPixImages/" + label + "_seg.tif"); //TODO this should not be hardcoded 
     //TODO free this memory after saving 
   }
 
@@ -201,23 +201,23 @@ object runMSRC {
         val xDim = image.getWidth
         val yDim = image.getHeight
         val zDim = image.getSize
-     val supPixMap = new HashMap[Int,Array[Int]]
+     val supPixMap = new HashMap[Int,Array[Int]] 
          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
             val lab = mask(x)(y)(z)
-            val refHist = supPixMap.getOrElseUpdate(lab, Array.fill(histBinsPerCol) { 0 })
+            val refHist = supPixMap.getOrElseUpdate(lab, (Array.fill(histBinsPerCol) { 0 }))
             val col = image.getVoxel(x,y,z).asInstanceOf[Int]
         
             refHist(min(histBinsPerCol - 1, (col / histWidt))) += 1
         }
           val keys = supPixMap.keySet.toList.sorted
-          keys.map { key => {
+        val out =  keys.map { key => {
             val hist = supPixMap.get(key).get.toList
             val mySum = hist.sum
             (key-> hist.map(a => (a.asInstanceOf[Double] / mySum)).toArray)
           }
           }.toMap
     
-        
+        out
    }
    
    def greyCoOccurancePerSuper(image:ImageStack,mask:Array[Array[Array[Int]]],histBins:Int,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1)), maxColorValue:Int=255):Map[Int,Array[Double]]={
@@ -273,7 +273,9 @@ object runMSRC {
      out
    }
 
-  def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
+ 
+   
+   def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false, debugLabelInFeat:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
     
     //distFn:((Double,Double)=>Double),sumFn:(Double,Double)=>Double,normFn:(Double,Int)=>Double, //TODO remove me
      val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
@@ -312,8 +314,9 @@ object runMSRC {
          val transProb = if(transProbFound) GraphUtils.readObjectFromFile[Array[Array[Double]]](transProbPath) else Array.fill(numClasses,numClasses){0.0}
          var totalConn= if(transProbFound) 1.0 else 0.0
          
-         
-       val allData = for( fI <- 0 until allFiles.size) yield {
+        
+        assert(allFiles.size>0)
+        val allData = for( fI <- 0 until allFiles.size) yield {
         val fName = allFiles(fI)
         val nameNoExt = fName.substring(0,fName.length()-4)
         val rawImagePath =  rawImgDir+"/"+ fName
@@ -443,11 +446,6 @@ object runMSRC {
     val keys = supPixCenter.keySet.toList.sorted
     assert(keys.equals((0 until keys.size).toList),"The Superpixel id counter skipped something "+keys.mkString(","))
   
-      val tFeat = System.currentTimeMillis()
-      
-    val featureVectors = featureFn(aStack,mask)
-    
-      println("Compute Features per Blob: "+(System.currentTimeMillis()-tFeat))
     val outEdgeMap = edgeMap.map(a => {
       val oldId = a._1
       val oldEdges = a._2
@@ -456,13 +454,6 @@ object runMSRC {
     
     
     
-    val maxId = max(supPixCenter.keySet)
-    val outNodes = for ( id <- 0 until keys.size) yield{
-      Node(id,Vector(featureVectors.get(id).get) , collection.mutable.Set(outEdgeMap.get(id).get.toSeq:_*))
-        }
-    val outGraph = new GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)](Vector(outNodes.toArray),maskpath) //TODO change the linkCord in graphStruct so it makes sense
-     GraphUtils.writeObjectToFile(graphCachePath,outGraph)    
-  
      /*
       * 
       * 
@@ -509,7 +500,31 @@ object runMSRC {
         println("Ground Truth Blob Mapping: "+(System.currentTimeMillis()-tGround))
          GraphUtils.writeObjectToFile(groundCachePath,groundTruthMap)
         
+          val tFeat = System.currentTimeMillis()
+    val featureVectors = if(debugLabelInFeat){
+      
+      val tmp = for(id <-0 until keys.size) yield{
+       val lab=  groundTruthMap.get(id).get
+       val feat = Array.fill(10){0.0}
+       feat(0)=lab.asInstanceOf[Double]
+       (id, feat)
+      }
+       tmp.toMap
+      
+      
+    }
+    else{
+      featureFn(aStack,mask)
+    }
    
+          println("Compute Features per Blob: "+(System.currentTimeMillis()-tFeat))
+    val maxId = max(supPixCenter.keySet)
+    val outNodes = for ( id <- 0 until keys.size) yield{
+      Node(id,Vector(featureVectors.get(id).get) , collection.mutable.Set(outEdgeMap.get(id).get.toSeq:_*))
+        }
+    val outGraph = new GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)](Vector(outNodes.toArray),maskpath) //TODO change the linkCord in graphStruct so it makes sense
+     GraphUtils.writeObjectToFile(graphCachePath,outGraph)    
+  
          
          
         val labelsInOrder = (0 until groundTruthMap.size).map(a=>groundTruthMap.get(a).get)
@@ -535,7 +550,7 @@ object runMSRC {
          
          //TODO remove debugging 
         GraphUtils.printSupPixLabels_Int(outGraph,outLabels,0,nameNoExt+"_"+"_idMap_",colorMap=colorToLabelMap.toMap.map(_.swap))
-        // GraphUtils.printBMPFromGraphInt(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
+        //GraphUtils.printBMPFromGraphInt(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
     
           
          println("Total Preprocessing time for "+nameNoExt+" :"+(System.currentTimeMillis()-tStartPre))
@@ -844,6 +859,22 @@ object runMSRC {
 
     //
     
+    /*
+    val path1 = "/home/mort/workspace/dissolve-struct/data/generated/neuro2/Images/"
+    val path2 = "/home/mort/workspace/dissolve-struct/data/generated/neuro2/GroundTruth/"
+    val mask40 = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](path1+"training2_SLIC_20_none.mask")
+     val opener = new Opener();
+        val img = opener.openImage(path1+"training2.tif");
+
+        printSuperPixels(mask40,img,150,"_s_20_neuroTrain_")
+        
+                val img2 = opener.openImage(path2+"training2_GT.tif");
+    
+            printSuperPixels(mask40,img2,150,"_s_20_neuroTrue_")
+    
+    */
+    //
+    
 
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
@@ -921,9 +952,9 @@ object runMSRC {
     
     if(solverOptions.dataGenSparsity> 0)
       solverOptions.dataWasGenerated=true
-      
+    solverOptions.LOSS_AUGMENTATION_OVERRIDE = options.getOrElse("LossAugOverride", "false").toBoolean
     solverOptions.inferenceMethod= if(solverOptions.useMF) "MF" else if(solverOptions.useNaiveUnaryMax) "NAIVE_MAX" else "Factorie"
-    
+    solverOptions.putLabelIntoFeat = options.getOrElse("labelInFeat","false").toBoolean
     
     
     /**
@@ -951,7 +982,7 @@ object runMSRC {
     if(GEN_NEW_SQUARE_DATA){
            val lotsofBMP = Option(new File(solverOptions.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
            assert(lotsofBMP.isEmpty,"You tried to create new data into a folder which has alreayd been used for a previous dataset")
-        GraphUtils.genColorfullSquaresDataSuperNoise(50,150,50,0.3333333,solverOptions.numClasses,0.55,0.15,solverOptions.dataFilesDir,solverOptions.dataRandSeed)
+        GraphUtils.genGreyfullSquaresDataSuperNoise(20,150,10,0.95,solverOptions.numClasses,0.0,0.0,solverOptions.dataFilesDir,solverOptions.dataRandSeed)
     }
     
     val runCFG=Option(new File(solverOptions.dataFilesDir+"/"+solverOptions.runName+"_run.cfg")).get
@@ -1002,6 +1033,7 @@ object runMSRC {
       //  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] 
     //TODO REMOVE DEBUG new method 
    val histBinsPerCol = 4
+   val histBinsPerGray = 8
    val histWidt = 255 / histBinsPerCol
    //BOOKMARK
    
@@ -1022,22 +1054,33 @@ object runMSRC {
           hist++coMat
         }
        else{
-          val hist=greyHist(image,mask,histBinsPerCol*3,255 / (histBinsPerCol*3))
-          val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
-          hist++coMat
+          val hist=greyHist(image,mask,histBinsPerGray,255 / (histBinsPerGray))
+          //val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
+          hist //++coMat
        }      
    }
-  // val (tr2,ts3,cMap2)=  genMSRCsupPixV2(solverOptions.numClasses,solverOptions.superPixelSize,solverOptions.imageDataFilesDir,solverOptions.groundTruthDataFilesDir,featFn2,solverOptions.dbcfwSeed,solverOptions.runName,solverOptions.squareSLICoption,solverOptions.trainTestEqual)
+  // 
     
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(solverOptions.numClasses, solverOptions.superPixelSize, solverOptions.imageDataFilesDir, solverOptions.groundTruthDataFilesDir, featFn2, solverOptions.dbcfwSeed, solverOptions.runName, solverOptions.squareSLICoption, solverOptions.trainTestEqual) 
+    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(solverOptions.numClasses, solverOptions.superPixelSize, solverOptions.imageDataFilesDir, solverOptions.groundTruthDataFilesDir, featFn2, solverOptions.dbcfwSeed, solverOptions.runName, solverOptions.squareSLICoption, solverOptions.trainTestEqual,solverOptions.putLabelIntoFeat) 
    
     
     
     
-    println("Train Size:"+trainData.size)
+    println("Train SgreyHistize:"+trainData.size)
     println("Test Size:"+testData.size)
+    
+    
+    //TODO debug remove
+    
+    println("------ First couple of features ------")
+    val pat = trainData(0).pattern
+    val name =  trainData(0).pattern.originMapFile
+    println(name)
+    for(i <- 0 until pat.size){
+      println("F<"+pat.getF(i)+">")
+    }
     
     
     
@@ -1097,7 +1140,7 @@ object runMSRC {
             solverOptions.learningRate ,solverOptions.useMF,solverOptions.mfTemp,solverOptions.useNaiveUnaryMax,
             DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,solverOptions.runName,
             if(solverOptions.useClassFreqWeighting) classFreqFound else null,
-            solverOptions.weighDownUnary,solverOptions.weighDownPairwise)
+            solverOptions.weighDownUnary,solverOptions.weighDownPairwise, solverOptions.LOSS_AUGMENTATION_OVERRIDE)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,

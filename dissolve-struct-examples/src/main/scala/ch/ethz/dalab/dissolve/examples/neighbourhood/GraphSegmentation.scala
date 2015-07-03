@@ -10,6 +10,7 @@ import breeze.linalg.DenseMatrix
 import breeze.linalg.DenseVector
 import breeze.linalg.Vector
 import breeze.linalg.normalize
+import breeze.linalg.norm
 import cc.factorie.infer.MaximizeByMPLP
 import cc.factorie.infer.SamplingMaximizer
 import cc.factorie.infer.VariableSettingsSampler
@@ -30,7 +31,7 @@ import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -101,6 +102,14 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
     loss.sum / (yPredict.d.size)
   }
+  
+  
+  /*
+  def lossFn(yTruth: yLabels, yPredict: yLabels): Double = {
+    0.0
+  }
+  * 
+  */
 
   def xFeatureStack(xi: xData): DenseMatrix[Double] = {
     val featureStack = DenseMatrix.zeros[Double](xi.getF(0).size, xi.size)
@@ -196,6 +205,10 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val thetaPairwise = pairwiseWeights
 
     
+    if(counter<3){
+     println("w norm: "+norm(new DenseVector(weightVec.toArray)))
+    }
+    
     if(counter<1){
       println("-------------Pairwise_Mat-------------")
       print("Diagonal: [[")
@@ -214,7 +227,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     }
     
     // If yi is present, do loss-augmentation
-    if (yi != null) {
+    if (yi != null && !LOSS_AUGMENTATION_OVERRIDE) {
       for (idx <- 0 until xi.size) { //TODO check if this is using correct indexs 
         thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / xi.size //We are using a zero-one loss per y so here there are just constants
         // Loss augmentation step
