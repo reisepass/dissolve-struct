@@ -136,29 +136,32 @@ object runMSRC {
             
              coOccuranceMaties.get(supID).get(bin)(neighBin)+=1 //If this throws an error then there must be a super pixel not in (0,numSuperPix]
              coNormalizingConst(supID)+=1.0
-             if(bin!=neighBin)  
+             if(bin!=neighBin){  
                coOccuranceMaties.get(supID).get(neighBin)(bin)+=1 //I dont care about direction of the neighbour. Someone could also use negative values in the directions 
-           })
+             
+             }
+             })
            
         }
         
         
         //I only need the upper triagular of the matrix since its symetric. Also i want all my features to be vectorized so
-        val n = maxBin
+
  val out=coOccuranceMaties.map( ((pair:(Int,Array[Array[Int]]))=> {
    val key = pair._1
    val myCoOccur = pair._2
    
         
-        val linFeat = Array.fill((n * (n+1)) / 2){0.0}; 
+        val linFeat = Array.fill((maxBin * (maxBin+1)) / 2){0.0}; 
     for (r<- 0 until maxBin ; c <- 0 until maxBin)
     {
      
-        val i = (n * r) + c-((r * (r+1))/2) 
+        val i = (maxBin * r) + c-((r * (r+1))/2) 
         linFeat(i) = myCoOccur(r)(c)/coNormalizingConst(key)
       
     }
- (key,linFeat)
+    val normFeat = normalize(DenseVector(linFeat))
+ (key,normFeat.toArray)
  })).toMap
  
    out
@@ -267,7 +270,8 @@ object runMSRC {
         linFeat(i) = myCoOccur(r)(c)/coNormalizingConst(key)
       
     }
- (key,linFeat)
+    val normFeat = normalize(DenseVector(linFeat.toArray))
+ (key,normFeat.toArray)
  })).toMap
         
      out
@@ -505,7 +509,7 @@ object runMSRC {
       
       val tmp = for(id <-0 until keys.size) yield{
        val lab=  groundTruthMap.get(id).get
-       val feat = Array.fill(10){0.0}
+       val feat = Array.fill(1){0.0}
        feat(0)=lab.asInstanceOf[Double]
        (id, feat)
       }
@@ -982,7 +986,7 @@ object runMSRC {
     if(GEN_NEW_SQUARE_DATA){
            val lotsofBMP = Option(new File(solverOptions.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
            assert(lotsofBMP.isEmpty,"You tried to create new data into a folder which has alreayd been used for a previous dataset")
-        GraphUtils.genGreyfullSquaresDataSuperNoise(20,150,10,0.95,solverOptions.numClasses,0.0,0.0,solverOptions.dataFilesDir,solverOptions.dataRandSeed)
+        GraphUtils.genColorfullSquaresDataSuperNoise(20,150,10,0.5,solverOptions.numClasses,0.0,0.0,solverOptions.dataFilesDir,solverOptions.dataRandSeed)
     }
     
     val runCFG=Option(new File(solverOptions.dataFilesDir+"/"+solverOptions.runName+"_run.cfg")).get

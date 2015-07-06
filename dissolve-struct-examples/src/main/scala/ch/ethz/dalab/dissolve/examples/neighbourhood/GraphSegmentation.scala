@@ -31,10 +31,11 @@ import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
+  assert (!(DISABLE_PAIRWISE&&DISABLE_UNARY), "Can not disable both pairwise and unary")
 
   println("GraphSegmentation::: (DISABLE_PAIRWISE= " + DISABLE_PAIRWISE + " )")
   //Convert the graph into one big feature vector 
@@ -47,27 +48,34 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
     val unaryFeatureSize = xFeatures * numClasses
     val pairwiseFeatureSize = numClasses * numClasses
-    val phi = if (!DISABLE_PAIRWISE) DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize) else DenseVector.zeros[Double](unaryFeatureSize)
+    val phi = if (!DISABLE_PAIRWISE) { if(!DISABLE_UNARY) DenseVector.zeros[Double](unaryFeatureSize + pairwiseFeatureSize) else DenseVector.zeros[Double](pairwiseFeatureSize+unaryFeatureSize)}else DenseVector.zeros[Double](unaryFeatureSize)
 
+    
+    if(!DISABLE_UNARY){
     val unary = DenseVector.zeros[Double](unaryFeatureSize)
     for (idx <- 0 until yDat.d.size) {
       val label = yDat.d(idx)
       val startIdx = label * xFeatures
       val endIdx = startIdx + xFeatures
       val curF =xDat.getF(idx) 
-      if(curF.size!=(endIdx-startIdx))
-        print("wtf")
-      if(endIdx > unary.size)
-        print("wtf2")
       unary(startIdx until endIdx) :=curF + unary(startIdx until endIdx)
     }
 
-    phi(0 until (unaryFeatureSize)) := unary
+    
+      phi(0 until (unaryFeatureSize)) := unary
+    }
 
     if (!DISABLE_PAIRWISE) {
       val pairwise = normalize(getPairwiseFeatureMap(yDat, xDat).toDenseVector) //TODO does this toDenseVector actually use proper columnIndex form, or atleast is it deterministic ? 
+      
+      if(!DISABLE_UNARY){
       assert((phi.size - unaryFeatureSize) == pairwise.size)
       phi((unaryFeatureSize) until phi.size) := pairwise
+      }
+      else{
+        
+         phi((unaryFeatureSize) until phi.size) := pairwise
+      }
 
     }
 
@@ -318,8 +326,8 @@ lastHash=thisyiHash
     // Unary features
     val startIdx = 0
     val endIdx = xFeatureSize * numClasses
-    assert(weightVec.length>=endIdx)
-    val unaryFeatureVec = weightVec(startIdx until endIdx).toDenseVector // Stored as [|--f(k=0)--||--f(k=1)--| ... |--f(K=k)--|]
+    //assert(weightVec.length>=endIdx)
+    val unaryFeatureVec = if(DISABLE_UNARY) DenseVector.zeros[Double](endIdx) else weightVec(startIdx until endIdx).toDenseVector // Stored as [|--f(k=0)--||--f(k=1)--| ... |--f(K=k)--|]
     val tempUnaryPot = unaryFeatureVec.toDenseMatrix.reshape(xFeatureSize, numClasses)
 
     val unaryPot =
@@ -343,7 +351,7 @@ lastHash=thisyiHash
         DenseMatrix.zeros[Double](0, 0)
       } else {
         val pairwiseFeatureVec = weightVec(endIdx until weightVec.size).toDenseVector
-        assert(pairwiseFeatureVec.size == numClasses * numClasses)
+        assert(pairwiseFeatureVec.size == numClasses * numClasses, "was ="+pairwiseFeatureVec.size  +" should have been= "+(numClasses * numClasses))
         pairwiseFeatureVec.toDenseMatrix.reshape(numClasses, numClasses)//TODO does this actually recover properly
       }
      assert((unaryPot.size+pairwisePot.size)==weightVec.length)

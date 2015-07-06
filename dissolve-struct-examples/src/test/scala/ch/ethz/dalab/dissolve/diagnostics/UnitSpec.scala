@@ -33,7 +33,7 @@ object ChainTestAdapter_G {
   type X = GraphStruct[Vector[Double], (Int, Int, Int)]
   type Y = GraphLabels
 
-  val myGraphSegObj = new GraphSegmentationClass(true, 100, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=true)
+  val myGraphSegObj = new GraphSegmentationClass(false, MAX_DECODE_ITERATIONS=100, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=false,USE_MF=false, DISABLE_UNARY = true)
 
   val dissolveFunctions: DissolveFunctions[X, Y] = myGraphSegObj
 
@@ -56,13 +56,17 @@ object ChainTestAdapter_G {
       hist ++ coMat
     } else {
       val hist = greyHist(image, mask, histBinsPerGray, 255 / (histBinsPerGray))
-      //val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
-      hist //++coMat
+      val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
+      hist ++coMat
     }
   }
-  // 
+  
+  val dataPath =  "/home/mort/workspace/dissolve-struct/data/generated/colorEasy"
+  val numClasses=2
+  println (" Using this data: "+ dataPath)
   //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-  val (trainData, testData, colorlabelMap, classFreqFound, transProb) = genMSRCsupPixV2(2, 10, "/home/mort/workspace/dissolve-struct/data/generated/MSWRC_better_labels/Images", "/home/mort/workspace/dissolve-struct/data/generated/MSWRC_better_labels/GroundTruth", featFn2, 100, "none", false, false, false)
+  val (trainData, testData, colorlabelMap, classFreqFound, transProb) = genMSRCsupPixV2(2, 10,dataPath+"/Images", dataPath+"/GroundTruth", featFn2, 100, "none8", false, false, false)
+
 
   val data = trainData.toArray
   
@@ -88,7 +92,7 @@ object ChainTestAdapter_G {
   
   val model: StructSVMModel[X, Y] =
     new StructSVMModel[X, Y](DenseVector.zeros(numd), 0.0,
-      DenseVector.zeros(numd), dissolveFunctions, 1)
+      DenseVector.zeros(numd), dissolveFunctions, numClasses) // T
 
       
       

@@ -9,10 +9,9 @@ import ch.ethz.dalab.dissolve.regression.LabeledObject
  * @author torekond
  */
 class OracleSpec extends UnitSpec {
-  
 
-  val NUM_WEIGHT_VECS = 10 // = # times each test case is attempted
-
+  val NUM_WEIGHT_VECS = 100 // = # times each test case is attempted
+  val EPSILON=(-0.00000001)
   // A sample datapoint
   val lo = data(0)
   // Size of joint feature map
@@ -60,14 +59,19 @@ class OracleSpec extends UnitSpec {
 
       // Get loss-augmented argmax prediction
       val ystar = maxoracle(model, x_m, y_m)
-      val shl = delta(y_m, ystar) - deltaF(lo, ystar, w)
-
+      val realLoss = delta(y_m, ystar)
+      val modelLoss = deltaF(lo, ystar, w)
+      
+      
+      val shl = realLoss - modelLoss
+          if(shl < EPSILON)  
+      println(" shl= "+shl+" rL:" + realLoss + " - mL:" + modelLoss+" ysInv:"+y_m.isInverseOf(ystar)+ " norm(w):"+norm(w.toDenseVector)+" nrom(yStar):"+norm(DenseVector(ystar.d.toArray)))
       shl
 
     }
 
     // This should be empty
-    val negShlSeq: Seq[Double] = shlSeq.filter(_ < 0.0)
+    val negShlSeq: Seq[Double] = shlSeq.filter(_ < EPSILON)
 
     assert(negShlSeq.length == 0,
       "%d / %d cases failed".format(negShlSeq.length, shlSeq.length))
@@ -97,7 +101,7 @@ class OracleSpec extends UnitSpec {
     }
 
     // This should be empty
-    val negShlSeq: Seq[Double] = shlSeq.filter(_ < 0.0)
+    val negShlSeq: Seq[Double] = shlSeq.filter(_ < EPSILON)
 
     assert(negShlSeq.length == 0,
       "%d / %d cases failed".format(negShlSeq.length, shlSeq.length))
@@ -125,12 +129,17 @@ class OracleSpec extends UnitSpec {
 
       val F_ystar = F(x_m, ystar, w)
       val F_gt = F(x_m, y_m, w)
+      if ((F_ystar - F_gt < 0.0)) {
+        val ystarIsEq = y_m.d.equals(ystar.d)
+        val ysAreInv = y_m.isInverseOf(ystar)
+        println(" F_ystar=" + F_ystar + " F_gt=" + F_gt + " y's are equal=" + ystarIsEq + " y's are Inv=" + ysAreInv+" norm(w)="+norm(DenseVector(w.toArray)))
 
+      }
       F_ystar - F_gt
     }
 
     // This should be empty
-    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < 0.0)
+    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < EPSILON)
 
     assert(negDiffSeq.length == 0,
       "%d / %d cases failed".format(negDiffSeq.length, diffSeq.length))
@@ -155,12 +164,18 @@ class OracleSpec extends UnitSpec {
 
       val F_ystar = F(x_m, ystar, w)
       val F_gt = F(x_m, y_m, w)
+      if ((F_ystar - F_gt < 0.0)) {
+        val ystarIsEq = y_m.d.equals(ystar.d)
+        val ysAreInv = y_m.isInverseOf(ystar)
+      println(" F_ystar=" + F_ystar + " F_gt=" + F_gt + " y's are equal=" + ystarIsEq + " y's are Inv=" + ysAreInv+" norm(w)="+norm(DenseVector(w.toArray)))
+
+      }
 
       F_ystar - F_gt
     }
 
     // This should be empty
-    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < 0.0)
+    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < EPSILON)
 
     assert(negDiffSeq.length == 0,
       "%d / %d cases failed".format(negDiffSeq.length, diffSeq.length))
@@ -190,7 +205,7 @@ class OracleSpec extends UnitSpec {
     }
 
     // This should be empty
-    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < 0.0)
+    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < EPSILON)
 
     assert(negDiffSeq.length == 0,
       "%d / %d cases failed".format(negDiffSeq.length, diffSeq.length))
@@ -219,7 +234,7 @@ class OracleSpec extends UnitSpec {
     }
 
     // This should be empty
-    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < 0.0)
+    val negDiffSeq: Seq[Double] = diffSeq.filter(_ < EPSILON)
 
     assert(negDiffSeq.length == 0,
       "%d / %d cases failed".format(negDiffSeq.length, diffSeq.length))
