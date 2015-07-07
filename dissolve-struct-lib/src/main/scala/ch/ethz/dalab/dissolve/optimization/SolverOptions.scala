@@ -80,6 +80,7 @@ class SolverOptions[X, Y] extends Serializable {
   var dataGenSquareNoise=0.0
   var dataGenHowMany=40
   var dataGenOsilNoise=0.0
+  var slicCompactness = 5.0 
   //Which decode func 
   var useMF=false
   var learningRate = 0.1
@@ -90,6 +91,9 @@ class SolverOptions[X, Y] extends Serializable {
   var enableOracleCache: Boolean = false
   var oracleCacheSize: Int = 10
   var dataGenGreyOnly:Boolean = false
+  var compPerPixLoss:Boolean=false
+  var dataGenEnforNeigh:Boolean=true
+  var dataGenNeighProb:Double =1.0
 
   // DBCFW specific params
   var H: Int = 5 // Number of data points to sample in each round of CoCoA (= number of local coordinate updates)
