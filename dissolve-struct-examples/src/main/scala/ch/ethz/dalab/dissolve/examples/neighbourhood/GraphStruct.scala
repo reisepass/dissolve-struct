@@ -15,6 +15,8 @@ import breeze.linalg.min
 import breeze.linalg.normalize
 import breeze.math._
 import breeze.numerics._
+import breeze.linalg._
+import breeze.numerics._
 import ch.ethz.dalab.dissolve.classification.StructSVMModel
 import java.io.PrintWriter
 import java.awt.image.DataBufferInt
@@ -143,6 +145,8 @@ object GraphUtils {
     out
   }
 
+  
+  
   def printBMPFromGraph(graph: GraphStruct[Vector[Double], (Int, Int, Int)], labels: GraphLabels, slice3dAt: Int = 0, name: String = "non", colorMap: Map[Int, (Int, Int, Int)] = null) {
 
     val mask = readObjectFromFile[Array[Array[Array[Int]]]](graph.originMapFile)
@@ -794,7 +798,7 @@ val pw = new PrintWriter(new File("../data/graph/" + name + "sID_graph_.txt"))
   }
   
   
-  def genColorfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1) ){
+  def genColorfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1), osilatingNoise:Double=0.0, osilationWaveLength:Double=10 ){
     assert(canvasSize % squareSize == 0)
     assert(portionBackground <= 1)
     assert(featureNoise <= 1)
@@ -834,16 +838,22 @@ val pw = new PrintWriter(new File("../data/graph/" + name + "sID_graph_.txt"))
         BufferedImage.TYPE_INT_RGB);
 
       
-     
+      val rPhaseX = random.nextDouble()*2*scala.math.Pi
+      val rPhaseY = random.nextDouble()*2*scala.math.Pi
+       val bPhaseX = random.nextDouble()*2*scala.math.Pi
+       val bPhaseY = random.nextDouble()*2*scala.math.Pi
+      val gPhaseX = random.nextDouble()*2*scala.math.Pi
+      val gPhaseY = random.nextDouble()*2*scala.math.Pi
 
       for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
 
         val myLabel = outLabel(x)(y)
         val uX = x/squareSize
         val uY = y/squareSize
-        val rN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
-        val gN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
-        val bN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+      
+        val rN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(rPhaseX))*cos(y*(1/osilationWaveLength)+(rPhaseY))+1)*255/2+  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val gN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(bPhaseX))*cos(y*(1/osilationWaveLength)+(bPhaseY))+1)*255/2 +  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val bN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(gPhaseX))*cos(y*(1/osilationWaveLength)+(gPhaseY))+1)*255/2 +  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
 
         val noisyColor = new Color(rN, gN, bN).getRGB
         imgData.setRGB(x, y, noisyColor)

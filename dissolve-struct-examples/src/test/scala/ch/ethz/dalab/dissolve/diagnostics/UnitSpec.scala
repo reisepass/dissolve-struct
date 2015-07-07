@@ -33,7 +33,7 @@ object ChainTestAdapter_G {
   type X = GraphStruct[Vector[Double], (Int, Int, Int)]
   type Y = GraphLabels
 
-  val myGraphSegObj = new GraphSegmentationClass(false, MAX_DECODE_ITERATIONS=100, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=false,USE_MF=false, DISABLE_UNARY = true)
+  val myGraphSegObj = new GraphSegmentationClass(false, MAX_DECODE_ITERATIONS=1000, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=false,USE_MF=false, DISABLE_UNARY = false)
 
   val dissolveFunctions: DissolveFunctions[X, Y] = myGraphSegObj
 
@@ -52,8 +52,8 @@ object ChainTestAdapter_G {
 
     if (isColor) {
       val hist = colorhist(image, mask, histBinsPerCol, 255 / histBinsPerCol)
-      val coMat = coOccurancePerSuperRGB(mask, image, numSupPix, histBinsPerCol)
-      hist ++ coMat
+     // val coMat = coOccurancePerSuperRGB(mask, image, numSupPix, histBinsPerCol)
+      hist///++ coMat
     } else {
       val hist = greyHist(image, mask, histBinsPerGray, 255 / (histBinsPerGray))
       val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)

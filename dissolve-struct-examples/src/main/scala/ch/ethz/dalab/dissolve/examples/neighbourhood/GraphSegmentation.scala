@@ -11,6 +11,8 @@ import breeze.linalg.DenseVector
 import breeze.linalg.Vector
 import breeze.linalg.normalize
 import breeze.linalg.norm
+import breeze.numerics._
+import breeze.linalg._
 import cc.factorie.infer.MaximizeByMPLP
 import cc.factorie.infer.SamplingMaximizer
 import cc.factorie.infer.VariableSettingsSampler
@@ -31,7 +33,7 @@ import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -89,7 +91,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val pairwiseMat = DenseMatrix.zeros[Double](yi.numClasses, yi.numClasses)
     for (idx <- 0 until xi.size) {
       val myLabel = yi.d(idx)
-      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour)) += 1} }
+      xi.getC(idx).foreach { neighbour => { pairwiseMat(myLabel, yi.d(neighbour)) += 1; pairwiseMat(yi.d(neighbour),myLabel) += 1  }}
     }
     pairwiseMat
   }
@@ -151,13 +153,24 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       }
 
       if (!DISABLE_PAIRWISE) {
+        
+        def getPair (i:Int,j:Int):Double={
+          if(PAIRWISE_UPPER_TRI){
+            val left = min(i,j)
+            val right = max(i,j)
+            thetaPairwise(left,right)
+          }
+          else{
+            thetaPairwise(i,j)
+          }
+        }
 
         graph.getC(idx).foreach { neighbour =>
           {
             if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
               nodePairsUsed.add((idx, neighbour))
               model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
-                def score(i: Pixel#Value, j: Pixel#Value) = thetaPairwise(i.intValue, j.intValue)*weighDownPairwise
+                def score(i: Pixel#Value, j: Pixel#Value) = getPair(i.intValue, j.intValue)*weighDownPairwise
               }
             }
           }
