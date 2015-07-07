@@ -880,6 +880,121 @@ pw.write(" ")
 pw.close
     
   }
+  
+  def genColorfullSquaresDataSuperNoiseEnforceNeigh(neighossible:Array[Array[Boolean]],howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1), osilatingNoise:Double=0.0, osilationWaveLength:Double=10 ){
+    assert(canvasSize % squareSize == 0)
+    assert(portionBackground <= 1)
+    assert(featureNoise <= 1)
+    assert(neighossible.length==numClasses)
+    assert(neighossible(0).length==numClasses)
+    
+    val random = if(randomSeed==(-1)) new java.util.Random() else new java.util.Random(randomSeed)
+     val colorMap = Random.shuffle(someColorsRGB)
+    val pathF = new File(outputDir + "/Images")
+    val pathFGT = new File(outputDir + "/GroundTruth")
+    if (!pathF.exists())
+      pathF.mkdirs()
+    if (!pathFGT.exists())
+      pathFGT.mkdirs()
+
+    for (count <- 1 to howMany) {
+      val uberPix = Array.fill(canvasSize / squareSize, canvasSize / squareSize) { 0 }
+      val uberNoise =Array.fill(canvasSize / squareSize, canvasSize / squareSize) { (-1,-1,-1) }
+      val outLabel = Array.fill(canvasSize, canvasSize) { -1 }
+
+      
+       for (uX <- 0 until uberPix.length; uY <- 0 until uberPix(0).length) {
+        uberNoise(uX)(uY)=(random.nextInt(256),random.nextInt(256),random.nextInt(256))
+      }
+       
+       
+      for (uX <- 0 until uberPix.length; uY <- 0 until uberPix(0).length) {
+        if (random.nextDouble() < portionBackground)
+          uberPix(uX)(uY) = 0
+        else{
+          
+          var candiAccepted = false;
+          var nextLabel = random.nextInt(numClasses - 1) + 1
+          var tryCount = 0
+          while(!candiAccepted&&tryCount<numClasses*3){
+            nextLabel = random.nextInt(numClasses - 1) + 1
+            tryCount+=1
+            candiAccepted=true
+            if(uX+1<uberPix.length)
+              if(!neighossible(uberPix(uX+1)(uY))(nextLabel))
+                candiAccepted=false
+           if(uX-1>=0)
+             if(!neighossible(uberPix(uX-1)(uY))(nextLabel))  
+                candiAccepted=false
+           if(uY+1<uberPix(0).length)
+             if(!neighossible(uberPix(uX)(uY+1))(nextLabel))
+                candiAccepted=false
+           if(uY-1>=0)
+              if(!neighossible(uberPix(uX)(uY-1))(nextLabel))
+                candiAccepted=false
+          }
+          if(!candiAccepted)
+            nextLabel=0
+          
+          uberPix(uX)(uY) = nextLabel
+        }
+      }
+      
+      
+      
+      
+      for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
+        outLabel(x)(y) = uberPix(x / squareSize)(y / squareSize)
+      }
+
+      val imgData: BufferedImage = new BufferedImage(canvasSize, canvasSize,
+        BufferedImage.TYPE_INT_RGB);
+      val imgGT: BufferedImage = new BufferedImage(canvasSize, canvasSize,
+        BufferedImage.TYPE_INT_RGB);
+
+      
+      val rPhaseX = random.nextDouble()*2*scala.math.Pi
+      val rPhaseY = random.nextDouble()*2*scala.math.Pi
+       val bPhaseX = random.nextDouble()*2*scala.math.Pi
+       val bPhaseY = random.nextDouble()*2*scala.math.Pi
+      val gPhaseX = random.nextDouble()*2*scala.math.Pi
+      val gPhaseY = random.nextDouble()*2*scala.math.Pi
+
+      for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
+
+        val myLabel = outLabel(x)(y)
+        val uX = x/squareSize
+        val uY = y/squareSize
+      
+        val rN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(rPhaseX))*cos(y*(1/osilationWaveLength)+(rPhaseY))+1)*255/2+  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val gN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(bPhaseX))*cos(y*(1/osilationWaveLength)+(bPhaseY))+1)*255/2 +  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val bN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(gPhaseX))*cos(y*(1/osilationWaveLength)+(gPhaseY))+1)*255/2 +  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+
+        val noisyColor = new Color(rN, gN, bN).getRGB
+        imgData.setRGB(x, y, noisyColor)
+        val trueColor = new Color(colorMap(myLabel)._1, colorMap(myLabel)._2, colorMap(myLabel)._3).getRGB
+        imgGT.setRGB(x, y, trueColor)
+
+      }
+      ImageIO.write(imgData, "BMP", new File(outputDir + "/Images/genImg_" + count + ".bmp")); //TODO change this output location
+      ImageIO.write(imgGT, "BMP", new File(outputDir + "/GroundTruth/genImg_" + count + "_GT.bmp")); //TODO change this output location
+    }
+  
+   val pw = new PrintWriter(new File(outputDir+"/dataGenerationConfig.cfg" ))
+   
+   pw.write("howMany:"+howMany)
+       pw.write("\ncanvasSize:"+canvasSize)
+       pw.write("\nsquareSize:"+squareSize) 
+       pw.write("\nportionBackground:"+portionBackground) 
+       pw.write("\nnumClasses:"+numClasses) 
+       pw.write("\nfeatureNoise:"+featureNoise)
+       pw.write("\nfineGrainNoise:"+fineGrainNoise) 
+       pw.write("\noutputDir:"+outputDir) 
+       pw.write("\nrandomSeed:"+randomSeed)
+pw.write(" ")
+pw.close
+    
+  }
 
     def genGreyfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1) ){
     assert(canvasSize % squareSize == 0)

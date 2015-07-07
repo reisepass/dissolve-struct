@@ -153,12 +153,12 @@ object runMSRC {
    
         
         val linFeat = Array.fill((maxBin * (maxBin+1)) / 2){0.0}; 
-    for (r<- 0 until maxBin ; c <- 0 until maxBin)
-    {
-     
-        val i = (maxBin * r) + c-((r * (r+1))/2) 
-        linFeat(i) = myCoOccur(r)(c)/coNormalizingConst(key)
-      
+    var countUT = 0
+    for(r <- 0 until maxBin; c<- 0 until maxBin){
+      if(c>=r){
+        linFeat(countUT)=myCoOccur(r)(c)
+        countUT+=1
+      }
     }
     val normFeat = normalize(DenseVector(linFeat))
  (key,normFeat.toArray)
@@ -226,8 +226,8 @@ object runMSRC {
    def greyCoOccurancePerSuper(image:ImageStack,mask:Array[Array[Array[Int]]],histBins:Int,directions:List[(Int,Int,Int)]=List((1,0,0),(0,1,0),(0,0,1)), maxColorValue:Int=255):Map[Int,Array[Double]]={
         val bitDepth = image.getBitDepth
         assert(bitDepth==8)//TODO can i generalize this to any bit depth ?
-        val maxAbsValue = maxColorValue //Divide by 2 because of sign 
-        //TODO this is most likely wrong 
+        val maxAbsValue = maxColorValue  
+        
         
         val binWidth = maxAbsValue/histBins.asInstanceOf[Double]
         val whichBin = (a:Int)=>{ (a/binWidth).asInstanceOf[Int]}
@@ -247,28 +247,28 @@ object runMSRC {
                val neighBin = whichBin(neighCol)
                val oldZ = coNormalizingConst.getOrElse(lab,0)
                coNormalizingConst.put(lab,oldZ+1)
-               myMat(myBin)(neighBin)+=1
+               gCoOcMats.get(lab).get(myBin)(neighBin)+=1
                if(myBin!=neighBin)
-                 myMat(neighBin)(myBin)+=1
+                 gCoOcMats.get(lab).get(neighBin)(myBin)+=1
                
              })
              
              
            }
    //I only need the upper triagular of the matrix since its symetric. Also i want all my features to be vectorized so
-   val n = histBins
+   
    val out=gCoOcMats.map( ((pair:(Int,Array[Array[Int]]))=> {
    val key = pair._1
    val myCoOccur = pair._2
    
         
-        val linFeat = Array.fill((n * (n+1)) / 2){0.0}; 
-    for (r<- 0 until n ; c <- 0 until n)
-    {
-     
-        val i = (n * r) + c-((r * (r+1))/2) 
-        linFeat(i) = myCoOccur(r)(c)/coNormalizingConst(key)
-      
+    val linFeat = Array.fill((histBins * (histBins+1)) / 2){0.0}; 
+    var countUT = 0
+    for(r <- 0 until histBins; c<- 0 until histBins){
+      if(c>=r){
+        linFeat(countUT)=myCoOccur(r)(c)
+        countUT+=1
+      }
     }
     val normFeat = normalize(DenseVector(linFeat.toArray))
  (key,normFeat.toArray)
@@ -279,7 +279,7 @@ object runMSRC {
 
  
    
-   def genMSRCsupPixV2 ( numClasses:Int,S:Int, imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false, debugLabelInFeat:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
+   def genMSRCsupPixV2 ( numClasses:Int,S:Int,M:Double ,imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false, debugLabelInFeat:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
     
     //distFn:((Double,Double)=>Double),sumFn:(Double,Double)=>Double,normFn:(Double,Int)=>Double, //TODO remove me
      val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
@@ -420,7 +420,7 @@ object runMSRC {
             (a:Int,n:Int) => round(a/n)
           
           
-        val allGr =  new SLIC[Int](distFn, rollingAvgFn, normFn, copyImage, S, 15, minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)   
+        val allGr =  new SLIC[Int](distFn, rollingAvgFn, normFn, copyImage, S, 15, M,minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false)   
         
         val tMask = System.currentTimeMillis()
         val mask = if( cacheMaskF.exists())  {
@@ -432,7 +432,7 @@ object runMSRC {
             allGr.calcSuperPixels 
           }
         println("Calculate SuperPixels time: "+(System.currentTimeMillis()-tMask))
-        printSuperPixels(mask,img,300,"_supPix_"+fI)//TODO remove me 
+       // printSuperPixels(mask,img,300,"_supPix_"+fI)//TODO remove me 
           if(!cacheMaskF.exists())
            GraphUtils.writeObjectToFile(maskpath,mask)//save a chace 
        
@@ -657,156 +657,159 @@ object runMSRC {
 
     val printImages: Boolean = options.getOrElse("printImages","false").toBoolean
     
-    val solverOptions: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new SolverOptions()
-    solverOptions.gitVersion = gitV
-    solverOptions.runName = experimentName
-    solverOptions.startTime = System.currentTimeMillis
-    solverOptions.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
-    solverOptions.debug = options.getOrElse("debug", "false").toBoolean
-    solverOptions.lambda = options.getOrElse("lambda", "0.01").toDouble
-    solverOptions.doWeightedAveraging = options.getOrElse("wavg", "false").toBoolean
-    solverOptions.doLineSearch = options.getOrElse("linesearch", "true").toBoolean
-    solverOptions.debug = options.getOrElse("debug", "false").toBoolean
-    solverOptions.onlyUnary = options.getOrElse("onlyUnary", "false").toBoolean
+    val sO: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new SolverOptions()
+    sO.gitVersion = gitV
+    sO.runName = experimentName
+    sO.startTime = System.currentTimeMillis
+    sO.roundLimit = options.getOrElse("roundLimit", "5").toInt // After these many passes, each slice of the RDD returns a trained model
+    sO.debug = options.getOrElse("debug", "false").toBoolean
+    sO.lambda = options.getOrElse("lambda", "0.01").toDouble
+    sO.doWeightedAveraging = options.getOrElse("wavg", "false").toBoolean
+    sO.doLineSearch = options.getOrElse("linesearch", "true").toBoolean
+    sO.debug = options.getOrElse("debug", "false").toBoolean
+    sO.onlyUnary = options.getOrElse("onlyUnary", "false").toBoolean
     //GraphSegmentation.DISABLE_PAIRWISE = solverOptions.onlyUnary
-    val MAX_DECODE_ITERATIONS:Int = options.getOrElse("maxDecodeItr",  (if(solverOptions.onlyUnary) 100 else 1000 ).toString ).toInt
+    val MAX_DECODE_ITERATIONS:Int = options.getOrElse("maxDecodeItr",  (if(sO.onlyUnary) 100 else 1000 ).toString ).toInt
     val MAX_DECODE_ITERATIONS_MF_ALT:Int = options.getOrElse("maxDecodeItrMF",  (MAX_DECODE_ITERATIONS).toString ).toInt
-    solverOptions.sample = options.getOrElse("sample", "frac")
-    solverOptions.sampleFrac = options.getOrElse("samplefrac", "1").toDouble
-    solverOptions.dbcfwSeed = options.getOrElse("dbcfwSeed","-1").toInt
-    solverOptions.sampleWithReplacement = options.getOrElse("samplewithreplacement", "false").toBoolean
+    sO.sample = options.getOrElse("sample", "frac")
+    sO.sampleFrac = options.getOrElse("samplefrac", "1").toDouble
+    sO.dbcfwSeed = options.getOrElse("dbcfwSeed","-1").toInt
+    sO.sampleWithReplacement = options.getOrElse("samplewithreplacement", "false").toBoolean
 
-    solverOptions.enableManualPartitionSize = options.getOrElse("manualrddpart", "false").toBoolean
-    solverOptions.NUM_PART = options.getOrElse("numpart", "2").toInt
+    sO.enableManualPartitionSize = options.getOrElse("manualrddpart", "false").toBoolean
+    sO.NUM_PART = options.getOrElse("numpart", "2").toInt
 
-    solverOptions.enableOracleCache = options.getOrElse("enableoracle", "false").toBoolean
-    solverOptions.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
-    solverOptions.useClassFreqWeighting =  options.getOrElse("weightedClassFreq","false").toBoolean
-    solverOptions.useMF=options.getOrElse("useMF","false").toBoolean
-    solverOptions.useNaiveUnaryMax = options.getOrElse("useNaiveUnaryMax","false").toBoolean
-    solverOptions.learningRate = options.getOrElse("learningRate","0.1").toDouble
-    solverOptions.mfTemp=options.getOrElse("mfTemp","5.0").toDouble
-    solverOptions.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
-    solverOptions.useMSRC = options.getOrElse("useMSRC","false").toBoolean
-    solverOptions.dataGenSparsity = options.getOrElse("dataGenSparsity","-1").toDouble
-    solverOptions.dataAddedNoise = options.getOrElse("dataAddedNoise","0.0").toDouble
-    solverOptions.dataNoiseOnlyTest = options.getOrElse("dataNoiseOnlyTest","false").toBoolean
-    solverOptions.dataGenTrainSize = options.getOrElse("dataGenTrainSize","40").toInt
-    solverOptions.dataGenTestSize = options.getOrElse("dataGenTestSize",solverOptions.dataGenTrainSize.toString).toInt
-    solverOptions.dataRandSeed = options.getOrElse("dataRandSeed","-1").toInt
-    solverOptions.dataGenCanvasSize = options.getOrElse("dataGenCanvasSize","16").toInt
-    solverOptions.numClasses = options.getOrElse("numClasses","24").toInt //TODO this only makes sense if you end up with the MSRC dataset 
-    solverOptions.generateMSRCSupPix = options.getOrElse("supMSRC","false").toBoolean
-    solverOptions.squareSLICoption = options.getOrElse("supSquareMSRC","false").toBoolean
-    solverOptions.trainTestEqual = options.getOrElse("trainTestEqual","false").toBoolean
+    sO.enableOracleCache = options.getOrElse("enableoracle", "false").toBoolean
+    sO.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
+    sO.useClassFreqWeighting =  options.getOrElse("weightedClassFreq","false").toBoolean
+    sO.useMF=options.getOrElse("useMF","false").toBoolean
+    sO.useNaiveUnaryMax = options.getOrElse("useNaiveUnaryMax","false").toBoolean
+    sO.learningRate = options.getOrElse("learningRate","0.1").toDouble
+    sO.mfTemp=options.getOrElse("mfTemp","5.0").toDouble
+    sO.debugInfoPath = options.getOrElse("debugpath", debugDir + "/imageseg-%d.csv".format(System.currentTimeMillis()))
+    sO.useMSRC = options.getOrElse("useMSRC","false").toBoolean
+    sO.dataGenSparsity = options.getOrElse("dataGenSparsity","-1").toDouble
+    sO.dataAddedNoise = options.getOrElse("dataAddedNoise","0.0").toDouble
+    sO.dataNoiseOnlyTest = options.getOrElse("dataNoiseOnlyTest","false").toBoolean
+    sO.dataGenTrainSize = options.getOrElse("dataGenTrainSize","40").toInt
+    sO.dataGenTestSize = options.getOrElse("dataGenTestSize",sO.dataGenTrainSize.toString).toInt
+    sO.dataRandSeed = options.getOrElse("dataRandSeed","-1").toInt
+    sO.dataGenCanvasSize = options.getOrElse("dataGenCanvasSize","16").toInt
+    sO.numClasses = options.getOrElse("numClasses","24").toInt //TODO this only makes sense if you end up with the MSRC dataset 
+    sO.generateMSRCSupPix = options.getOrElse("supMSRC","false").toBoolean
+    sO.squareSLICoption = options.getOrElse("supSquareMSRC","false").toBoolean
+    sO.trainTestEqual = options.getOrElse("trainTestEqual","false").toBoolean
     val GEN_NEW_SQUARE_DATA=options.getOrElse("GEN_NEW_SQUARE_DATA","false").toBoolean
-    solverOptions.isColor = options.getOrElse("isColor","true").toBoolean
-    solverOptions.superPixelSize = options.getOrElse("S","15").toInt
-    solverOptions.initWithEmpiricalTransProb = options.getOrElse("initTransProb","false").toBoolean
-    solverOptions.dataFilesDir = options.getOrElse("dataDir","###")
-    assert(!solverOptions.dataFilesDir.equals("###"),"Error,  Please specify a the 'dataDir' paramater")
-    val tmpDir = solverOptions.dataFilesDir.split("/")
-    solverOptions.dataSetName = tmpDir(tmpDir.length-1)
-    solverOptions.imageDataFilesDir = options.getOrElse("imageDir",  solverOptions.dataFilesDir+"/Images")
-    solverOptions.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",  solverOptions.dataFilesDir+"/GroundTruth")
-    solverOptions.weighDownPairwise = options.getOrElse("weighDownPairwise","1.0").toDouble
-    assert(solverOptions.weighDownPairwise<=1.0 &&solverOptions.weighDownPairwise>=0)
-    solverOptions.weighDownUnary = options.getOrElse("weighDownUnary","1.0").toDouble
-    assert(solverOptions.weighDownUnary<=1.0&&solverOptions.weighDownUnary>=0)
-    if(solverOptions.squareSLICoption) 
-      solverOptions.generateMSRCSupPix=true
+    sO.isColor = options.getOrElse("isColor","true").toBoolean
+    sO.superPixelSize = options.getOrElse("S","15").toInt
+    sO.initWithEmpiricalTransProb = options.getOrElse("initTransProb","false").toBoolean
+    sO.dataFilesDir = options.getOrElse("dataDir","###")
+    assert(!sO.dataFilesDir.equals("###"),"Error,  Please specify a the 'dataDir' paramater")
+    val tmpDir = sO.dataFilesDir.split("/")
+    sO.dataSetName = tmpDir(tmpDir.length-1)
+    sO.imageDataFilesDir = options.getOrElse("imageDir",  sO.dataFilesDir+"/Images")
+    sO.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",  sO.dataFilesDir+"/GroundTruth")
+    sO.weighDownPairwise = options.getOrElse("weighDownPairwise","1.0").toDouble
+    assert(sO.weighDownPairwise<=1.0 &&sO.weighDownPairwise>=0)
+    sO.weighDownUnary = options.getOrElse("weighDownUnary","1.0").toDouble
+    assert(sO.weighDownUnary<=1.0&&sO.weighDownUnary>=0)
+    if(sO.squareSLICoption) 
+      sO.generateMSRCSupPix=true
     val DEBUG_COMPARE_MF_FACTORIE =  options.getOrElse("cmpEnergy","false").toBoolean
     
-    if(solverOptions.dataGenSparsity> 0)
-      solverOptions.dataWasGenerated=true
-    solverOptions.LOSS_AUGMENTATION_OVERRIDE = options.getOrElse("LossAugOverride", "false").toBoolean
-    solverOptions.inferenceMethod= if(solverOptions.useMF) "MF" else if(solverOptions.useNaiveUnaryMax) "NAIVE_MAX" else "Factorie"
-    solverOptions.putLabelIntoFeat = options.getOrElse("labelInFeat","false").toBoolean
-    solverOptions.PAIRWISE_UPPER_TRI = options.getOrElse("PAIRWISE_UPPER_TRI","true").toBoolean
-    solverOptions.dataGenSquareNoise = options.getOrElse("dataGenSquareNoise","0.0").toDouble
-    solverOptions.dataGenSquareSize  = options.getOrElse("dataGenSquareSize","10").toInt
-    solverOptions.dataGenHowMany = options.getOrElse("dataGenHowMany","40").toInt
-    solverOptions.dataGenOsilNoise = options.getOrElse("dataGenOsilNoise","0.0").toDouble
-    solverOptions.dataGenGreyOnly = options.getOrElse("dataGenGreyOnly","false").toBoolean
+    if(sO.dataGenSparsity> 0)
+      sO.dataWasGenerated=true
+    sO.LOSS_AUGMENTATION_OVERRIDE = options.getOrElse("LossAugOverride", "false").toBoolean
+    sO.inferenceMethod= if(sO.useMF) "MF" else if(sO.useNaiveUnaryMax) "NAIVE_MAX" else "Factorie"
+    sO.putLabelIntoFeat = options.getOrElse("labelInFeat","false").toBoolean
+    sO.PAIRWISE_UPPER_TRI = options.getOrElse("PAIRWISE_UPPER_TRI","true").toBoolean
+    sO.dataGenSquareNoise = options.getOrElse("dataGenSquareNoise","0.0").toDouble
+    sO.dataGenSquareSize  = options.getOrElse("dataGenSquareSize","10").toInt
+    sO.dataGenHowMany = options.getOrElse("dataGenHowMany","40").toInt
+    sO.dataGenOsilNoise = options.getOrElse("dataGenOsilNoise","0.0").toDouble
+    sO.dataGenGreyOnly = options.getOrElse("dataGenGreyOnly","false").toBoolean
+    sO.compPerPixLoss = options.getOrElse("compPerPixLoss","false").toBoolean
+    sO.dataGenEnforNeigh = options.getOrElse("dataGenEnforNeigh","false").toBoolean
+    sO.dataGenNeighProb = options.getOrElse("dataGenNeighProb","1.0").toDouble  
+    sO.slicCompactness = options.getOrElse("slicCompactness","5.0").toDouble
     /**
      * Some local overrides
      */
     if (runLocally) {
      // solverOptions.sampleFrac = 0.2
-      solverOptions.enableOracleCache = false
-      solverOptions.oracleCacheSize = 100
-      solverOptions.stoppingCriterion = RoundLimitCriterion
+      sO.enableOracleCache = false
+      sO.oracleCacheSize = 100
+      sO.stoppingCriterion = RoundLimitCriterion
       //solverOptions.roundLimit = 2
-      solverOptions.enableManualPartitionSize = true
-      solverOptions.NUM_PART = 1
-      solverOptions.doWeightedAveraging = false
+      sO.enableManualPartitionSize = true
+      sO.NUM_PART = 1
+      sO.doWeightedAveraging = false
       
       //solverOptions.debug = true
       //solverOptions.debugMultiplier = 1
     }
     
     
-    // (Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]], Array[LabeledObject[DenseMatrix[ROIFeature], DenseMatrix[ROILabel]]]) 
-
-    
-    //genColorfullSquaresData(howMany: Int, canvasSize: Int, squareSize : Int, portionBackground: Double, numClasses: Int, featureNoise: Double, outputDir:String){
-    if(GEN_NEW_SQUARE_DATA){
-           if(solverOptions.dataGenSparsity==(-1))
-             solverOptions.dataGenSparsity=1.0/solverOptions.numClasses
-           val lotsofBMP = Option(new File(solverOptions.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
+   if(GEN_NEW_SQUARE_DATA){
+           if(sO.dataGenSparsity==(-1))
+             sO.dataGenSparsity=1.0/sO.numClasses
+           val lotsofBMP = Option(new File(sO.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
            assert(lotsofBMP.isEmpty,"You tried to create new data into a folder which has alreayd been used for a previous dataset")
         
-        if(solverOptions.dataGenGreyOnly)
-          GraphUtils.genGreyfullSquaresDataSuperNoise(solverOptions.dataGenHowMany,solverOptions.dataGenCanvasSize,solverOptions.dataGenSquareSize,solverOptions.dataGenSparsity,solverOptions.numClasses,
-            solverOptions.dataGenSquareNoise,solverOptions.dataAddedNoise,
-            solverOptions.dataFilesDir,solverOptions.dataRandSeed)
-        else
-        GraphUtils.genColorfullSquaresDataSuperNoise(solverOptions.dataGenHowMany,solverOptions.dataGenCanvasSize,solverOptions.dataGenSquareSize,solverOptions.dataGenSparsity,solverOptions.numClasses,
-            solverOptions.dataGenSquareNoise,solverOptions.dataAddedNoise,
-            solverOptions.dataFilesDir,solverOptions.dataRandSeed,
-            solverOptions.dataGenOsilNoise,solverOptions.superPixelSize)
+        if(sO.dataGenGreyOnly)
+          GraphUtils.genGreyfullSquaresDataSuperNoise(sO.dataGenHowMany,sO.dataGenCanvasSize,sO.dataGenSquareSize,sO.dataGenSparsity,sO.numClasses,
+            sO.dataGenSquareNoise,sO.dataAddedNoise,
+            sO.dataFilesDir,sO.dataRandSeed)
+        else{
+          if(!sO.dataGenEnforNeigh){
+            GraphUtils.genColorfullSquaresDataSuperNoise(sO.dataGenHowMany,sO.dataGenCanvasSize,sO.dataGenSquareSize,sO.dataGenSparsity,sO.numClasses,
+            sO.dataGenSquareNoise,sO.dataAddedNoise,
+            sO.dataFilesDir,sO.dataRandSeed,
+            sO.dataGenOsilNoise,sO.superPixelSize)
+          }
+          else{
+            val neighRules = Array.fill(sO.numClasses,sO.numClasses){true}
+            for( x<- 0 until sO.numClasses ;y<-0 until sO.numClasses){
+              //if(x!=y)
+              if(x!=0&&y!=0)
+                if(Random.nextDouble()>sO.dataGenNeighProb){
+                  neighRules(x)(y)=false
+                  neighRules(y)(x)=false
+                }
+              
+            }
+            GraphUtils.genColorfullSquaresDataSuperNoiseEnforceNeigh(neighRules,sO.dataGenHowMany,sO.dataGenCanvasSize,sO.dataGenSquareSize,sO.dataGenSparsity,sO.numClasses,
+            sO.dataGenSquareNoise,sO.dataAddedNoise,
+            sO.dataFilesDir,sO.dataRandSeed,
+            sO.dataGenOsilNoise,sO.superPixelSize)
+          }
+        }
     }
     
-    val runCFG=Option(new File(solverOptions.dataFilesDir+"/"+solverOptions.runName+"_run.cfg")).get
+    val runCFG=Option(new File(sO.dataFilesDir+"/"+sO.runName+"_run.cfg")).get
     if(!runCFG.exists()){
-      val pw = new PrintWriter(new File(solverOptions.dataFilesDir+"/"+solverOptions.runName+"_run.cfg"))
+      val pw = new PrintWriter(new File(sO.dataFilesDir+"/"+sO.runName+"_run.cfg"))
       pw.write(options.toString)
       pw.write("\n")
-      pw.write(solverOptions.toString())
+      pw.write(sO.toString())
       pw.close
     }
     else{
-      val pw = new PrintWriter(new File(solverOptions.dataFilesDir+"/"+solverOptions.runName+"_"+System.currentTimeMillis()+"_run.cfg"))
+      val pw = new PrintWriter(new File(sO.dataFilesDir+"/"+sO.runName+"_"+System.currentTimeMillis()+"_run.cfg"))
       pw.write(options.toString)
       pw.write("\n")
-      pw.write(solverOptions.toString())
+      pw.write(sO.toString())
       pw.close
     }
        
     
     
-    
-    
-    def getMSRC():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int, Int, Int), Int])={
-          val (oldtrainData, oldtestData) = ImageSegmentationUtils.loadMSRC("../data/generated/MSRC_ObjCategImageDatabase_v2")
-      
-        val graphTrainD = for (i <- 0 until oldtrainData.size) yield {
-          val (gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtrainData(i).pattern, oldtrainData(i).label, solverOptions.numClasses)
-          new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
-        }
-        val graphTestD = for (i <- 0 until oldtestData.size) yield {
-          val (gTrain, gLabel) = GraphUtils.convertOT_msrc_toGraph(oldtestData(i).pattern, oldtestData(i).label, solverOptions.numClasses)
-          new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](gLabel, gTrain)
-        }
-        val colorMapInt = ImageSegmentationUtils.colormapRGB
-     
-    return (graphTrainD.toArray.toSeq, graphTestD.toArray.toSeq,colorMapInt)
-    }
+   
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
     def genSquareNoiseD():(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[(Int, Int, Int), Int])= {
-      val trainData = GraphUtils.genSquareBlobs(solverOptions.dataGenTrainSize,solverOptions.dataGenCanvasSize,solverOptions.dataGenSparsity,solverOptions.numClasses, if(solverOptions.dataNoiseOnlyTest) 0.0 else solverOptions.dataAddedNoise,solverOptions.dataRandSeed).toArray.toSeq
-    val testData = GraphUtils.genSquareBlobs(solverOptions.dataGenTestSize,solverOptions.dataGenCanvasSize,solverOptions.dataGenSparsity,solverOptions.numClasses,solverOptions.dataAddedNoise,solverOptions.dataRandSeed+1).toArray.toSeq
+      val trainData = GraphUtils.genSquareBlobs(sO.dataGenTrainSize,sO.dataGenCanvasSize,sO.dataGenSparsity,sO.numClasses, if(sO.dataNoiseOnlyTest) 0.0 else sO.dataAddedNoise,sO.dataRandSeed).toArray.toSeq
+    val testData = GraphUtils.genSquareBlobs(sO.dataGenTestSize,sO.dataGenCanvasSize,sO.dataGenSparsity,sO.numClasses,sO.dataAddedNoise,sO.dataRandSeed+1).toArray.toSeq
 
      return (trainData,testData, new HashMap[(Int,Int,Int),Int]().toMap)
     }
@@ -814,9 +817,10 @@ object runMSRC {
    
       //  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] 
     //TODO REMOVE DEBUG new method 
-   val histBinsPerCol = 4
-   val histBinsPerGray = 8
-   val histWidt = 255 / histBinsPerCol
+   val histBinsPerCol = 3
+   val histBinsPerGray = 5
+   val histCoGrayBins = 3
+   
    //BOOKMARK
    
  
@@ -832,20 +836,34 @@ object runMSRC {
         
         if(isColor){
           val hist=colorhist(image,mask,histBinsPerCol,255 / histBinsPerCol)
-          //val coMat = coOccurancePerSuperRGB(mask, image, numSupPix, histBinsPerCol)
-          hist//++coMat
+          hist
+         /*
+          val coMat = coOccurancePerSuperRGB(mask, image, numSupPix, 2)
+         val combine= hist.map( (a:(Int,Array[Double]))=> { 
+            val key = a._1
+            val histData = a._2
+            (key , histData++coMat.get(key).get)            
+          })
+          combine
+          * 
+          */
         }
        else{
           val hist=greyHist(image,mask,histBinsPerGray,255 / (histBinsPerGray))
-          //val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
-          hist //++coMat
+          val coMat= greyCoOccurancePerSuper(image, mask, histCoGrayBins)
+          val combine= hist.map( (a:(Int,Array[Double]))=> { 
+            val key = a._1
+            val histData = a._2
+            (key , histData++coMat.get(key).get)            
+          })
+          combine
        }      
    }
   // 
     
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(solverOptions.numClasses, solverOptions.superPixelSize, solverOptions.imageDataFilesDir, solverOptions.groundTruthDataFilesDir, featFn2, solverOptions.dbcfwSeed, solverOptions.runName, solverOptions.squareSLICoption, solverOptions.trainTestEqual,solverOptions.putLabelIntoFeat) 
+    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(sO.numClasses, sO.superPixelSize, sO.slicCompactness,sO.imageDataFilesDir, sO.groundTruthDataFilesDir, featFn2, sO.dbcfwSeed, sO.runName, sO.squareSLICoption, sO.trainTestEqual,sO.putLabelIntoFeat) 
    
     
     
@@ -864,14 +882,36 @@ object runMSRC {
       println("F<"+pat.getF(i)+">")
     }
     
+    println("----- First Example of each Class -----")
+    for( lab <- 0 until sO.numClasses){
+      
+      var labFound = -1; 
+      
+        val pat = trainData(0).pattern
+        val labData = trainData(0).label
+        val name = trainData(0).pattern.originMapFile
+        var xi = 0
+        while( labFound<= 10 && xi<labData.d.size){
+          if(labData.d(xi)==lab){
+            labFound +=1
+            println("F of l_"+lab+"\t<"+pat.getF(xi)+">")
+          }
+          xi+=1
+        }
+        if(labFound==(-1)){
+          println("F of l_"+lab+"\tNOT FOUND in first image ")
+        }
+      
+    }
     
     
-     if(solverOptions.initWithEmpiricalTransProb){
+    
+     if(sO.initWithEmpiricalTransProb){
       val featureSize =trainData(0).pattern.getF(0).size
-      val unaryWeight =Array.fill(solverOptions.numClasses*featureSize){0.0}
+      val unaryWeight =Array.fill(sO.numClasses*featureSize){0.0}
       val pairwiseWeight =  (new DenseVector(transProb.flatten)):/(10.0)
       val initWeight = unaryWeight++pairwiseWeight.toArray
-      solverOptions.initWeight=initWeight
+      sO.initWeight=initWeight
      }
       
     
@@ -886,10 +926,10 @@ object runMSRC {
     * 
     */
     
-    if(solverOptions.useMSRC) solverOptions.numClasses = 24
+    if(sO.useMSRC) sO.numClasses = 24
 
 
-    println(solverOptions.toString())
+    println(sO.toString())
 
     val conf =
       if (runLocally)
@@ -906,29 +946,29 @@ object runMSRC {
     
     
     
-    solverOptions.testDataRDD =
-      if (solverOptions.enableManualPartitionSize)
-        Some(sc.parallelize(trainData, solverOptions.NUM_PART))
+    sO.testDataRDD =
+      if (sO.enableManualPartitionSize)
+        Some(sc.parallelize(trainData, sO.NUM_PART))
       else
         Some(sc.parallelize(trainData))
 
     val trainDataRDD =
-      if (solverOptions.enableManualPartitionSize)
-        sc.parallelize(trainData, solverOptions.NUM_PART)
+      if (sO.enableManualPartitionSize)
+        sc.parallelize(trainData, sO.NUM_PART)
       else
         sc.parallelize(trainData)
 
-        val myGraphSegObj = new GraphSegmentationClass(solverOptions.onlyUnary,MAX_DECODE_ITERATIONS,
-            solverOptions.learningRate ,solverOptions.useMF,solverOptions.mfTemp,solverOptions.useNaiveUnaryMax,
-            DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,solverOptions.runName,
-            if(solverOptions.useClassFreqWeighting) classFreqFound else null,
-            solverOptions.weighDownUnary,solverOptions.weighDownPairwise, solverOptions.LOSS_AUGMENTATION_OVERRIDE,
-            false,solverOptions.PAIRWISE_UPPER_TRI)
+        val myGraphSegObj = new GraphSegmentationClass(sO.onlyUnary,MAX_DECODE_ITERATIONS,
+            sO.learningRate ,sO.useMF,sO.mfTemp,sO.useNaiveUnaryMax,
+            DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,sO.runName,
+            if(sO.useClassFreqWeighting) classFreqFound else null,
+            sO.weighDownUnary,sO.weighDownPairwise, sO.LOSS_AUGMENTATION_OVERRIDE,
+            false,sO.PAIRWISE_UPPER_TRI)
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
         trainDataRDD,
         myGraphSegObj,
-        solverOptions)
+        sO)
 
     val t0MTrain = System.currentTimeMillis()
     val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = trainer.trainModel()
@@ -957,8 +997,8 @@ object runMSRC {
         val fileName = fileNameExt(0)
         
         val tPrint = System.currentTimeMillis()
-        GraphUtils.printBMPFromGraphInt(item.pattern,prediction,0,fileName+solverOptions.runName+"_"+count+"-train_predict",colorMap=invColorMap)
-        GraphUtils.printBMPFromGraphInt(item.pattern,item.label,0,fileName+solverOptions.runName+"_"+count+"-train_true",colorMap=invColorMap)
+        GraphUtils.printBMPFromGraphInt(item.pattern,prediction,0,fileName+sO.runName+"_"+count+"-train_predict",colorMap=invColorMap)
+        GraphUtils.printBMPFromGraphInt(item.pattern,item.label,0,fileName+sO.runName+"_"+count+"-train_true",colorMap=invColorMap)
        
         //val supPixToOrig = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.pattern.originMapFile)
         //val origTrueLabel = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](item.label.originalLabelFile)
@@ -967,7 +1007,8 @@ object runMSRC {
      
      avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction) //TODO change this so that it tests the original pixel labels 
      val tFindLoss = System.currentTimeMillis()
-     avgPerPixTrainLoss +=  GraphUtils.lossPerPixelInt(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
+    if(sO.compPerPixLoss)
+       avgPerPixTrainLoss +=  GraphUtils.lossPerPixelInt(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
    //  println("PerPixel loss counting"+(System.currentTimeMillis()-tFindLoss))
       count+=1
     }
@@ -980,9 +1021,9 @@ object runMSRC {
     count = 0
     
     def lossPerLabel(correct:GraphLabels,predict:GraphLabels):( Vector[Double],Vector[Double],Vector[Double])={
-      val labelOccurance = Vector(Array.fill(solverOptions.numClasses){0.0})
-    val labelIncorrectlyUsed = Vector(Array.fill(solverOptions.numClasses){0.0})
-    val labelNotRecog = Vector(Array.fill(solverOptions.numClasses){0.0})
+      val labelOccurance = Vector(Array.fill(sO.numClasses){0.0})
+    val labelIncorrectlyUsed = Vector(Array.fill(sO.numClasses){0.0})
+    val labelNotRecog = Vector(Array.fill(sO.numClasses){0.0})
      for ( i <- 0 until correct.d.size){
        val cLab = correct.d(i)
        val pLab = predict.d(i)
@@ -994,9 +1035,9 @@ object runMSRC {
      }
      (labelOccurance,labelIncorrectlyUsed,labelNotRecog)
     }
-    val labelOccurance = Vector(Array.fill(solverOptions.numClasses){0.0})
-    val labelIncorrectlyUsed = Vector(Array.fill(solverOptions.numClasses){0.0})
-    val labelNotRecog = Vector(Array.fill(solverOptions.numClasses){0.0})
+    val labelOccurance = Vector(Array.fill(sO.numClasses){0.0})
+    val labelIncorrectlyUsed = Vector(Array.fill(sO.numClasses){0.0})
+    val labelNotRecog = Vector(Array.fill(sO.numClasses){0.0})
     
     
     for (item <- testData) {
@@ -1022,7 +1063,7 @@ object runMSRC {
         */
       }
   
-     
+      if(sO.compPerPixLoss)
       avgPerPixTestLoss +=  GraphUtils.lossPerPixelInt(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)
       avgTestLoss += myGraphSegObj.lossFn(item.label, prediction)
       val perLabel = lossPerLabel(item.label, prediction)
@@ -1041,7 +1082,7 @@ object runMSRC {
     println("Label to Color Mapping "+colorlabelMap)
     println("Internal Class Freq:  \t"+classFreqFound)
     println("#EndScore#,%d,%s,%s,%d,%.3f,%.3f,%s,%d,%d,%.3f,%s,%d,%d,%s,%s,%d,%s,%f,%f,%d,%s,%s,%.3f,%.3f,%s,%s".format(
-        solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,(t1MTrain-t0MTrain),solverOptions.dataGenSparsity,solverOptions.dataAddedNoise,if(solverOptions.dataNoiseOnlyTest)"t"else"f",solverOptions.dataGenTrainSize,solverOptions.dataGenCanvasSize,solverOptions.learningRate,if(solverOptions.useMF)"t"else"f",solverOptions.numClasses,MAX_DECODE_ITERATIONS,if(solverOptions.onlyUnary)"t"else"f",if(solverOptions.debug)"t"else"f",solverOptions.roundLimit,if(solverOptions.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,solverOptions.dataRandSeed , if(solverOptions.useMSRC) "t" else "f", if(solverOptions.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(solverOptions.trainTestEqual)"t" else "f" , solverOptions.dataSetName ) )
+        sO.startTime, sO.runName,sO.gitVersion,(t1MTrain-t0MTrain),sO.dataGenSparsity,sO.dataAddedNoise,if(sO.dataNoiseOnlyTest)"t"else"f",sO.dataGenTrainSize,sO.dataGenCanvasSize,sO.learningRate,if(sO.useMF)"t"else"f",sO.numClasses,MAX_DECODE_ITERATIONS,if(sO.onlyUnary)"t"else"f",if(sO.debug)"t"else"f",sO.roundLimit,if(sO.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,sO.dataRandSeed , if(sO.useMSRC) "t" else "f", if(sO.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(sO.trainTestEqual)"t" else "f" , sO.dataSetName ) )
         
   
     sc.stop()

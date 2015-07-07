@@ -33,7 +33,7 @@ object ChainTestAdapter_G {
   type X = GraphStruct[Vector[Double], (Int, Int, Int)]
   type Y = GraphLabels
 
-  val myGraphSegObj = new GraphSegmentationClass(false, MAX_DECODE_ITERATIONS=1000, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=false,USE_MF=false, DISABLE_UNARY = false)
+  val myGraphSegObj = new GraphSegmentationClass(true, MAX_DECODE_ITERATIONS=1000, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=false,USE_MF=false, DISABLE_UNARY = false)
 
   val dissolveFunctions: DissolveFunctions[X, Y] = myGraphSegObj
 

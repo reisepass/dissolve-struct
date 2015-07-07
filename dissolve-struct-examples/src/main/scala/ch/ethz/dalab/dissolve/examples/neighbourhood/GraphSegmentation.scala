@@ -32,6 +32,9 @@ import ch.ethz.dalab.dissolve.optimization.DissolveFunctions
 import ch.ethz.dalab.dissolve.optimization.RoundLimitCriterion
 import ch.ethz.dalab.dissolve.optimization.SolverUtils
 import scala.collection.mutable.HashSet
+import cc.factorie.infer.MaximizeByBPLoopy
+import cc.factorie.la.DenseTensor1
+import cc.factorie.la.Tensor
 
 class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
@@ -129,7 +132,82 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     featureStack
   }
 
-  def decodeFn(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, debug: Boolean = false): yLabels = {
+  def decodeFn_BP(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, debug: Boolean = false): yLabels = {
+
+    val t0 = System.currentTimeMillis()
+    val model = new ItemizedModel
+    val numRegions: Int = thetaUnary.rows
+    assert(numRegions == graph.size)
+    val numClasses: Int = thetaUnary.cols
+
+    class RegionVar(val score: Int) extends IntegerVariable(score)
+
+    object PixelDomain extends DiscreteDomain(numClasses)
+
+    class Pixel(i: Int) extends DiscreteVariable(i) { //i is just the initial value 
+      def domain = PixelDomain
+    }
+
+    val labelParams = Array.fill(graph.size) { new Pixel(0) }
+    val nodePairsUsed: HashSet[(Int, Int)] = new HashSet[(Int, Int)]()
+    for (idx <- 0 until labelParams.length) {
+      model ++= new Factor1(labelParams(idx)) { 
+          val weights: DenseTensor1 = new DenseTensor1(thetaUnary(idx, ::).t.toArray)
+        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)*weighDownUnary //TODO am i reading thetaUnary corectly here? Maybe its witched
+        override def valuesScore(tensor: Tensor): Double = {
+          weights dot tensor
+        }
+      }
+
+      if (!DISABLE_PAIRWISE) {
+        
+        def getPair (i:Int,j:Int):Double={
+          if(PAIRWISE_UPPER_TRI){
+            val left = min(i,j)
+            val right = max(i,j)
+            thetaPairwise(left,right)
+          }
+          else{
+            thetaPairwise(i,j)
+          }
+        }
+
+        graph.getC(idx).foreach { neighbour =>
+          {
+            if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
+              nodePairsUsed.add((idx, neighbour))
+              model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
+                val weights: DenseTensor1 = new DenseTensor1(thetaPairwise.toArray)
+                def score(i: Pixel#Value, j: Pixel#Value) = getPair(i.intValue, j.intValue)*weighDownPairwise
+                  override def valuesScore(tensor: Tensor): Double = {
+                    weights dot tensor
+                  }
+              }
+            }
+          }
+        }
+      }
+    }
+
+   
+    if(counter<1) println("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
+     
+    MaximizeByBPLoopy.maximize(labelParams,model)
+    val mapLabelsBP: Array[Int] = (0 until numRegions).map {
+      idx =>
+        // assgn(pixelSeq(idx)).intValue
+        labelParams(idx).intValue
+    }.toArray
+
+    
+   
+    val t1 = System.currentTimeMillis()
+    //print(" decodeTime=[%d s]".format(  (t1-t0)/1000  ))
+    new GraphLabels(Vector(mapLabelsBP), numClasses)
+  }
+
+  
+  def decodeFn_sample(thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData, debug: Boolean = false): yLabels = {
 
     val t0 = System.currentTimeMillis()
     val model = new ItemizedModel
@@ -149,7 +227,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val nodePairsUsed: HashSet[(Int, Int)] = new HashSet[(Int, Int)]()
     for (idx <- 0 until labelParams.length) {
       model ++= new Factor1(labelParams(idx)) {
-        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)*weighDownUnary
+        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)*weighDownUnary //TODO am i reading thetaUnary corectly here? Maybe its witched
       }
 
       if (!DISABLE_PAIRWISE) {
@@ -183,6 +261,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val maxIterations = MAX_DECODE_ITERATIONS
     val maximizer = new MaximizeByMPLP(maxIterations)
     val assgn = maximizer.infer(labelParams, model).mapAssignment //Where the magic happens 
+     
     // Retrieve assigned labels from these pixels
     val out = Array.fill[Int](graph.size)(0)
     for (i <- 0 until out.size) {
@@ -193,6 +272,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     new GraphLabels(Vector(out), numClasses)
   }
 
+  
   var counter =0; //TODO REMOVE 
   var lastHash:Int=0;
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
@@ -291,11 +371,17 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       NaiveUnaryMax.decodeFn(thetaUnary)
     }
     else{
-      decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+      val t00 = System.currentTimeMillis()
+     // val factD = decodeFn_sample(thetaUnary, thetaPairwise, xi, debug = false)
+      val t0BP = System.currentTimeMillis()
+      val bpD = decodeFn_BP(thetaUnary, thetaPairwise, xi, debug = false)
+     // println("#CMP Factorie BP< Ft(" +(t0BP-t00)+") BPt("+(System.currentTimeMillis()-t0BP)+") dif: " + lossFn(bpD, factD) +" >")
+      
+      bpD
       }
     
     if(DEBUG_COMPARE_MF_FACTORIE){
-      val factorieDecode = decodeFn(thetaUnary, thetaPairwise, xi, debug = false)
+      val factorieDecode = decodeFn_sample(thetaUnary, thetaPairwise, xi, debug = false)
       val mfDecode =  MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
       val naiveDecode =  NaiveUnaryMax.decodeFn(thetaUnary)
       
