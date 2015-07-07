@@ -75,6 +75,11 @@ class SolverOptions[X, Y] extends Serializable {
   var dataFilesDir=""
   var imageDataFilesDir=""
   var groundTruthDataFilesDir=""
+  var PAIRWISE_UPPER_TRI=true
+  var dataGenSquareSize=10
+  var dataGenSquareNoise=0.0
+  var dataGenHowMany=40
+  var dataGenOsilNoise=0.0
   //Which decode func 
   var useMF=false
   var learningRate = 0.1
@@ -84,6 +89,7 @@ class SolverOptions[X, Y] extends Serializable {
   // Cache params
   var enableOracleCache: Boolean = false
   var oracleCacheSize: Int = 10
+  var dataGenGreyOnly:Boolean = false
 
   // DBCFW specific params
   var H: Int = 5 // Number of data points to sample in each round of CoCoA (= number of local coordinate updates)
