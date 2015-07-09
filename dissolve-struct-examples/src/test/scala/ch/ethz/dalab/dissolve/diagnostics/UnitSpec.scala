@@ -65,7 +65,7 @@ object ChainTestAdapter_G {
   val numClasses=2
   println (" Using this data: "+ dataPath)
   //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-  val (trainData, testData, colorlabelMap, classFreqFound, transProb) = genMSRCsupPixV2(2, 10,dataPath+"/Images", dataPath+"/GroundTruth", featFn2, 100, "none8", false, false, false)
+  val (trainData, testData, colorlabelMap, classFreqFound, transProb) = genMSRCsupPixV2(2, 10,10,dataPath+"/Images", dataPath+"/GroundTruth", featFn2, 100, "none8", false, false, false)
 
 
   val data = trainData.toArray
