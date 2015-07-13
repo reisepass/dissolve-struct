@@ -264,10 +264,10 @@ class DBCFWSolverTuned[X, Y](
             solverOptions.dataGenHowMany,solverOptions.slicCompactness,bToS(solverOptions.putLabelIntoFeat),solverOptions.dataAddedNoise
             ))
         //TODO need to add expID tag, maybe git Version 
-
+//test
    
         
-    
+    val a=0
         
       RoundEvaluation(roundNum, elapsedTime, primal, dual, dualityGap, trainError, testError)
     }

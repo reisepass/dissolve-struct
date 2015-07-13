@@ -81,6 +81,8 @@ class SolverOptions[X, Y] extends Serializable {
   var dataGenHowMany=40
   var dataGenOsilNoise=0.0
   var slicCompactness = 5.0 
+  var modelPairwiseDataDependent=false
+  var featIncludeMeanIntensity=false
   //Which decode func 
   var useMF=false
   var learningRate = 0.1
