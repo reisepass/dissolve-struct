@@ -28,7 +28,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
                      rollingAvgFn: ((DataType, DataType, Int) => DataType),
                      normFn: ((DataType, Int) => DataType),
                      image: Array[Array[Array[DataType]]], S: Int, K:Int=5,inM:Double=Double.MinValue ,maxIterations: Int = 15, minChangePerIter: Double = 0.000001,
-                     connectivityOption: String = "Functional", debug: Boolean = true, USE_CLUSTER_MAX_NORMALIZING:Boolean=true) {
+                     connectivityOption: String = "Imperative", debug: Boolean = false, USE_CLUSTER_MAX_NORMALIZING:Boolean=true) {
 
   //TODO try out different tif image stacks and see what dim2 is 
 
