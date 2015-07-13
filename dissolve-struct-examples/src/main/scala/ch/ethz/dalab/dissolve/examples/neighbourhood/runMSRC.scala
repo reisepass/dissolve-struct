@@ -134,7 +134,7 @@ object runMSRC {
              val neighRGB = image.getVoxel(x+el._1,y+el._2,z+el._3).asInstanceOf[Int]
              val neighBin = whichBin(col.getRed(neighRGB),col.getGreen(neighRGB),col.getBlue(neighRGB))
             
-             coOccuranceMaties.get(supID).get(bin)(neighBin)+=1 //If this throws an error then there must be a super pixel not in (0,numSuperPix]
+         coOccuranceMaties.get(supID).get(bin)(neighBin)+=1 //If this throws an error then there must be a super pixel not in (0,numSuperPix]
              coNormalizingConst(supID)+=1.0
              if(bin!=neighBin){  
                coOccuranceMaties.get(supID).get(neighBin)(bin)+=1 //I dont care about direction of the neighbour. Someone could also use negative values in the directions 
@@ -765,7 +765,20 @@ object runMSRC {
            if(sO.dataGenSparsity==(-1))
              sO.dataGenSparsity=1.0/sO.numClasses
            val lotsofBMP = Option(new File(sO.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
-           assert(lotsofBMP.isEmpty,"You tried to create new data into a folder which has alreayd been used for a previous dataset")
+           
+           if(!lotsofBMP.isEmpty){
+             val dirName="genD_"+sO.runName+"_"+sO.dataGenGreyOnly+"_"+sO.dataGenEnforNeigh+"_"+sO.numClasses+"_"+sO.dataGenCanvasSize+"_"+sO.dataGenSquareSize+"_"+sO.dataAddedNoise+"_"+sO.dataGenSparsity+"_"+sO.superPixelSize+"_t_"+System.currentTimeMillis()
+             val tmpDir = sO.dataFilesDir.split("/")
+              sO.dataSetName = dirName
+              tmpDir(tmpDir.length-1)=dirName
+              sO.dataFilesDir=tmpDir.mkString("/")
+              
+    sO.imageDataFilesDir = options.getOrElse("imageDir",  sO.dataFilesDir+"/Images")
+    sO.groundTruthDataFilesDir = options.getOrElse("groundTruthDir",  sO.dataFilesDir+"/GroundTruth")
+  
+           }
+            val lotsofBMP2= Option(new File(sO.dataFilesDir+"/Images").list).map(_.filter(_.endsWith(".bmp")))
+            assert(lotsofBMP2.isEmpty,"You tried to create new data into a folder which has alreayd been used for a previous dataset")
         
         if(sO.dataGenGreyOnly)
           GraphUtils.genGreyfullSquaresDataSuperNoise(sO.dataGenHowMany,sO.dataGenCanvasSize,sO.dataGenSquareSize,sO.dataGenSparsity,sO.numClasses,

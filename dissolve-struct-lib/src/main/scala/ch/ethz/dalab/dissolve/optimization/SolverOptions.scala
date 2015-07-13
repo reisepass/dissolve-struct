@@ -94,7 +94,12 @@ class SolverOptions[X, Y] extends Serializable {
   var compPerPixLoss:Boolean=false
   var dataGenEnforNeigh:Boolean=true
   var dataGenNeighProb:Double =1.0
-
+  var debugPrintSuperPixImg:Boolean=false
+  var featHistSize:Int=4
+  var featCoOcurNumBins:Int=3
+  var useLoopyBP:Boolean=false
+  var useMPLP:Boolean=false
+  var slicNormalizePerClust:Boolean=true
   // DBCFW specific params
   var H: Int = 5 // Number of data points to sample in each round of CoCoA (= number of local coordinate updates)
   var sampleFrac: Double = 0.5

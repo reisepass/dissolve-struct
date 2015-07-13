@@ -62,6 +62,12 @@ class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
   def get(i: Int): Node[Features] = { graphNodes(i) }
   def getC(i: Int): scala.collection.mutable.Set[Int] = { graphNodes(i).connections }
   def size = graphNodes.size
+  def getConnectionsAsArrays():Array[Array[Int]]={
+   val out= for( i <- 0 until graph.size) yield{
+      getC(i).toArray
+    }
+   out.toList.toArray
+  }
 
 }
 

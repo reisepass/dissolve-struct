@@ -366,7 +366,9 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     
     
     val decoded =   if(USE_MF){
-      MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+            
+      val mfout = MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,connections=xi.getConnectionsAsArrays, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+      new GraphLabels(Vector(mfout),numClasses)
       }
     else if(USE_NAIV_UNARY_MAX){
       NaiveUnaryMax.decodeFn(thetaUnary)
@@ -386,7 +388,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     
     if(DEBUG_COMPARE_MF_FACTORIE){
       val factorieDecode = decodeFn_MPLP(thetaUnary, thetaPairwise, xi, debug = false)
-      val mfDecode =  MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,graph=xi, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())
+      val mfDecode= new GraphLabels( Vector(MeanFieldTest.decodeFn_PR(thetaUnary,thetaPairwise,connections=xi.getConnectionsAsArrays, maxIterations  = MAX_DECODE_ITERATIONS_MF_ALT,temp=MF_TEMP, debug= false ,logTag=thisyiHash.toString())),numClasses)
       val naiveDecode =  NaiveUnaryMax.decodeFn(thetaUnary)
       
       val halfEfact  = halfEnergyOf(factorieDecode,thetaUnary,thetaPairwise,xi)

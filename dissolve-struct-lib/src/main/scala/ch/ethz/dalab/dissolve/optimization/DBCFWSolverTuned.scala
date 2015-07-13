@@ -253,13 +253,19 @@ class DBCFWSolverTuned[X, Y](
           println("# Neg Gap after "+gammaZeroInARow+"gamma < 0");
         }
           //assert(dualityGap>0)
+      def bToS( a:Boolean)={if(a)"t"else"f"}
         
-        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d"
+        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d, %s, %s, %.3f, %d, %d, %s, %s, %s, %.3f, %d, %d, %.3f,%s,%.3f"
         .format(solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
-            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", if(solverOptions.onlyUnary) "t" else "f" ,if(solverOptions.squareSLICoption) "t" else "f" , solverOptions.superPixelSize, solverOptions.dataSetName, if(solverOptions.trainTestEqual)"t" else "f",
-            solverOptions.inferenceMethod,solverOptions.dbcfwSeed))
+            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", 
+            if(solverOptions.onlyUnary) "t" else "f" ,if(solverOptions.squareSLICoption) "t" else "f" , solverOptions.superPixelSize, solverOptions.dataSetName, if(solverOptions.trainTestEqual)"t" else "f",
+            solverOptions.inferenceMethod,solverOptions.dbcfwSeed, if(solverOptions.dataGenGreyOnly) "t" else "f", if(solverOptions.compPerPixLoss) "t" else "f", solverOptions.dataGenNeighProb, solverOptions.featHistSize,
+            solverOptions.featCoOcurNumBins, if(solverOptions.useLoopyBP) "t" else "f", if(solverOptions.useMPLP) "t" else "f", bToS(solverOptions.slicNormalizePerClust), solverOptions.dataGenOsilNoise, solverOptions.dataRandSeed,
+            solverOptions.dataGenHowMany,solverOptions.slicCompactness,bToS(solverOptions.putLabelIntoFeat),solverOptions.dataAddedNoise
+            ))
         //TODO need to add expID tag, maybe git Version 
-        
+
+   
         
     
         
