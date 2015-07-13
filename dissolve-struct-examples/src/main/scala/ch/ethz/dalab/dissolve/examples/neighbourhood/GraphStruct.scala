@@ -78,7 +78,7 @@ case class Node[Features](
   override def hashCode(): Int = {
     idx
   }
-
+  
 }
 
 case class GraphLabels(d: Vector[Int], numClasses: Int, originalLabelFile: String = "None") extends Serializable {
