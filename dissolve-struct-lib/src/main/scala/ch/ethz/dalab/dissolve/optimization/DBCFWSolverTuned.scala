@@ -29,7 +29,7 @@ import ch.ethz.dalab.dissolve.regression.LabeledObject
 class DBCFWSolverTuned[X, Y](
   val data: RDD[LabeledObject[X, Y]],
   val dissolveFunctions: DissolveFunctions[X, Y],
-  val solverOptions: SolverOptions[X, Y],
+  val sO: SolverOptions[X, Y],
   val miniBatchEnabled: Boolean = false) extends Serializable {
 
   /**
@@ -80,7 +80,7 @@ class DBCFWSolverTuned[X, Y](
 
     val samplePoint = data.first()
     val dataSize = data.count().toInt
-    val testDataSize = if (solverOptions.testDataRDD.isDefined) solverOptions.testDataRDD.get.count().toInt else 0
+    val testDataSize = if (sO.testDataRDD.isDefined) sO.testDataRDD.get.count().toInt else 0
 
     val verboseDebug: Boolean = false
 
@@ -88,15 +88,15 @@ class DBCFWSolverTuned[X, Y](
     // Let the initial model contain zeros for all weights
     // Global model uses Dense Vectors by default
     
-    if(solverOptions.initWithEmpiricalTransProb){
+    if(sO.initWithEmpiricalTransProb){
       
-      val tmp =DenseVector(solverOptions.initWeight)
+      val tmp =DenseVector(sO.initWeight)
       print("##Using Init Weight: "+tmp)
     }
     
     
-    var globalModel: StructSVMModel[X, Y] = new StructSVMModel[X, Y]( if(solverOptions.initWithEmpiricalTransProb) DenseVector(solverOptions.initWeight) else DenseVector.zeros(d), 0.0,
-      DenseVector.zeros(d), dissolveFunctions, solverOptions.numClasses)
+    var globalModel: StructSVMModel[X, Y] = new StructSVMModel[X, Y]( if(sO.initWithEmpiricalTransProb) DenseVector(sO.initWeight) else DenseVector.zeros(d), 0.0,
+      DenseVector.zeros(d), dissolveFunctions, sO.numClasses)
 
     val numPartitions: Int =
       data.partitions.size
@@ -152,7 +152,7 @@ class DBCFWSolverTuned[X, Y](
     val indexedPrimals: Array[(Index, PrimalInfo)] = (0 until dataSize).toArray.zip(
       // Fill up a list of (ZeroVector, 0.0) - the initial w_i and l_i
       Array.fill(dataSize)((
-        if (solverOptions.sparse) // w_i can be either Sparse or Dense 
+        if (sO.sparse) // w_i can be either Sparse or Dense 
           SparseVector.zeros[Double](d)
         else
           DenseVector.zeros[Double](d),
@@ -165,7 +165,7 @@ class DBCFWSolverTuned[X, Y](
     // For each Primal (i.e, Index), cache a list of Decodings (i.e, Y's)
     // If cache is disabled, add an empty array. This immediately drops the joins later on and saves time in communicating an unnecessary RDD.
     val indexedCache: Array[(Index, BoundedCacheList[Y])] =
-      if (solverOptions.enableOracleCache)
+      if (sO.enableOracleCache)
         (0 until dataSize).toArray.zip(
           Array.fill(dataSize)(MutableList[Y]()) // Fill up a list of (ZeroVector, 0.0) - the initial w_i and l_i
           )
@@ -191,12 +191,12 @@ class DBCFWSolverTuned[X, Y](
      * or b) "perc" - Fraction of dataset to sample \in [0.0, 1.0]
      */
     val sampleFrac: Double = {
-      if (solverOptions.sample == "frac")
-        solverOptions.sampleFrac
-      else if (solverOptions.sample == "count")
-        math.min(solverOptions.H / dataSize, 1.0)
+      if (sO.sample == "frac")
+        sO.sampleFrac
+      else if (sO.sample == "count")
+        math.min(sO.H / dataSize, 1.0)
       else {
-        println("[WARNING] %s is not a valid option. Reverting to sampleFrac = 0.5".format(solverOptions.sample))
+        println("[WARNING] %s is not a valid option. Reverting to sampleFrac = 0.5".format(sO.sample))
         0.5
       }
     }
@@ -205,13 +205,13 @@ class DBCFWSolverTuned[X, Y](
      * In case of weighted averaging, start off with an all-zero (wAvg, lAvg)
      */
     var wAvg: Vector[Double] =
-      if (solverOptions.doWeightedAveraging)
+      if (sO.doWeightedAveraging)
         DenseVector.zeros(d)
       else null
     var lAvg: Double = 0.0
 
     var weightedAveragesOfPrimals: PrimalInfo =
-      if (solverOptions.doWeightedAveraging)
+      if (sO.doWeightedAveraging)
         (DenseVector.zeros(d), 0.0)
       else null
 
@@ -219,7 +219,7 @@ class DBCFWSolverTuned[X, Y](
 
     def getLatestModel(): StructSVMModel[X, Y] = {
       val debugModel: StructSVMModel[X, Y] = globalModel.clone()
-      if (solverOptions.doWeightedAveraging) {
+      if (sO.doWeightedAveraging) {
         debugModel.updateWeights(weightedAveragesOfPrimals._1)
         debugModel.updateEll(weightedAveragesOfPrimals._2)
       }
@@ -228,19 +228,19 @@ class DBCFWSolverTuned[X, Y](
 
     def getLatestGap(): Double = {
       val debugModel: StructSVMModel[X, Y] = getLatestModel()
-      val gap = SolverUtils.dualityGap(data, dissolveFunctions, debugModel, solverOptions.lambda, dataSize)
+      val gap = SolverUtils.dualityGap(data, dissolveFunctions, debugModel, sO.lambda, dataSize)
       gap._1
     }
 
     def evaluateModel(model: StructSVMModel[X, Y], roundNum: Int = 0): RoundEvaluation = {
-      val dual = -SolverUtils.objectiveFunction(model.getWeights(), model.getEll(), solverOptions.lambda)
-      val dualityGap = SolverUtils.dualityGap(data, dissolveFunctions, model, solverOptions.lambda, dataSize)._1
+      val dual = -SolverUtils.objectiveFunction(model.getWeights(), model.getEll(), sO.lambda)
+      val dualityGap = SolverUtils.dualityGap(data, dissolveFunctions, model, sO.lambda, dataSize)._1
       val primal = dual + dualityGap
 
       val trainError = SolverUtils.averageLoss(data, dissolveFunctions, model, dataSize)
       val testError =
-        if (solverOptions.testDataRDD.isDefined)
-          SolverUtils.averageLoss(solverOptions.testDataRDD.get, dissolveFunctions, model, testDataSize)
+        if (sO.testDataRDD.isDefined)
+          SolverUtils.averageLoss(sO.testDataRDD.get, dissolveFunctions, model, testDataSize)
         else
           0.00
 
@@ -256,13 +256,13 @@ class DBCFWSolverTuned[X, Y](
       def bToS( a:Boolean)={if(a)"t"else"f"}
         
         println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d, %s, %s, %.3f, %d, %d, %s, %s, %s, %.3f, %d, %d, %.3f,%s,%.3f"
-        .format(solverOptions.startTime, solverOptions.runName,solverOptions.gitVersion,elapsedTime, roundNum, dualityGap, primal,
-            dual, trainError, testError,solverOptions.sampleFrac, if(solverOptions.doWeightedAveraging) "t" else "f", 
-            if(solverOptions.onlyUnary) "t" else "f" ,if(solverOptions.squareSLICoption) "t" else "f" , solverOptions.superPixelSize, solverOptions.dataSetName, if(solverOptions.trainTestEqual)"t" else "f",
-            solverOptions.inferenceMethod,solverOptions.dbcfwSeed, if(solverOptions.dataGenGreyOnly) "t" else "f", if(solverOptions.compPerPixLoss) "t" else "f", solverOptions.dataGenNeighProb, solverOptions.featHistSize,
-            solverOptions.featCoOcurNumBins, if(solverOptions.useLoopyBP) "t" else "f", if(solverOptions.useMPLP) "t" else "f", bToS(solverOptions.slicNormalizePerClust), solverOptions.dataGenOsilNoise, solverOptions.dataRandSeed,
-            solverOptions.dataGenHowMany,solverOptions.slicCompactness,bToS(solverOptions.putLabelIntoFeat),solverOptions.dataAddedNoise
-            ))
+        .format(sO.startTime, sO.runName,sO.gitVersion,elapsedTime, roundNum, dualityGap, primal,
+            dual, trainError, testError,sO.sampleFrac, if(sO.doWeightedAveraging) "t" else "f", 
+            if(sO.onlyUnary) "t" else "f" ,if(sO.squareSLICoption) "t" else "f" , sO.superPixelSize, sO.dataSetName, if(sO.trainTestEqual)"t" else "f",
+            sO.inferenceMethod,sO.dbcfwSeed, if(sO.dataGenGreyOnly) "t" else "f", if(sO.compPerPixLoss) "t" else "f", sO.dataGenNeighProb, sO.featHistSize,
+            sO.featCoOcurNumBins, if(sO.useLoopyBP) "t" else "f", if(sO.useMPLP) "t" else "f", bToS(sO.slicNormalizePerClust), sO.dataGenOsilNoise, sO.dataRandSeed,
+            sO.dataGenHowMany,sO.slicCompactness,bToS(sO.putLabelIntoFeat),sO.dataAddedNoise
+            )+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+","+bToS(sO.featAddIntensityVariance))
         //TODO need to add expID tag, maybe git Version 
 //test
    
@@ -272,7 +272,7 @@ class DBCFWSolverTuned[X, Y](
       RoundEvaluation(roundNum, elapsedTime, primal, dual, dualityGap, trainError, testError)
     }
 
-    println("Beginning training of %d data points in %d passes with lambda=%f".format(dataSize, solverOptions.roundLimit, solverOptions.lambda))
+    println("Beginning training of %d data points in %d passes with lambda=%f".format(dataSize, sO.roundLimit, sO.lambda))
 
     debugSb ++= "round,time,primal,dual,gap,train_error,test_error\n"
 
@@ -285,19 +285,19 @@ class DBCFWSolverTuned[X, Y](
       .takeWhile {
         roundNum =>
           val continueExecution =
-            solverOptions.stoppingCriterion match {
-              case RoundLimitCriterion => roundNum <= solverOptions.roundLimit
-              case TimeLimitCriterion  => getElapsedTimeSecs() < solverOptions.timeLimit
+            sO.stoppingCriterion match {
+              case RoundLimitCriterion => roundNum <= sO.roundLimit
+              case TimeLimitCriterion  => getElapsedTimeSecs() < sO.timeLimit
               case GapThresholdCriterion =>
                 // Calculating duality gap is really expensive. So, check ever gapCheck rounds
-                if (roundNum % solverOptions.gapCheck == 0)
-                  getLatestGap() > solverOptions.gapThreshold
+                if (roundNum % sO.gapCheck == 0)
+                  getLatestGap() > sO.gapThreshold
                 else
                   true
               case _ => throw new Exception("Unrecognized Stopping Criterion")
             }
 
-          if (solverOptions.debug && (!(continueExecution || (roundNum - 1 % solverOptions.debugMultiplier == 0)) || roundNum == 1)) {
+          if (sO.debug && (!(continueExecution || (roundNum - 1 % sO.debugMultiplier == 0)) || roundNum == 1)) {
             // Force evaluation of model in 2 cases - Before beginning the very first round, and after the last round
             debugSb ++= evaluateModel(getLatestModel(), if (roundNum == 1) 0 else roundNum) + "\n"
           }
@@ -311,9 +311,9 @@ class DBCFWSolverTuned[X, Y](
            * Step 1 - Create a joint RDD containing all information of idx -> (data, primals, cache)
            */
           
-          val indexedJointData: RDD[(Index, InputDataShard[X, Y])] = if(solverOptions.dbcfwSeed==(-1) )
+          val indexedJointData: RDD[(Index, InputDataShard[X, Y])] = if(sO.dbcfwSeed==(-1) )
             indexedTrainDataRDD
-              .sample(solverOptions.sampleWithReplacement, sampleFrac)   
+              .sample(sO.sampleWithReplacement, sampleFrac)   
               .join(indexedPrimalsRDD)
               .leftOuterJoin(indexedCacheRDD)
               .mapValues { // Because mapValues preserves partitioning
@@ -322,7 +322,7 @@ class DBCFWSolverTuned[X, Y](
               }
           else
 indexedTrainDataRDD
-              .sample(solverOptions.sampleWithReplacement, sampleFrac,solverOptions.dbcfwSeed)  
+              .sample(sO.sampleWithReplacement, sampleFrac,sO.dbcfwSeed)  
               .join(indexedPrimalsRDD)
               .leftOuterJoin(indexedCacheRDD)
               .mapValues { // Because mapValues preserves partitioning
@@ -349,7 +349,7 @@ indexedTrainDataRDD
                 mapper((idx, numPartitions),
                   dataIterator,
                   helperFunctions,
-                  solverOptions,
+                  sO,
                   globalModel,
                   dataSize,
                   kAccum),
@@ -360,7 +360,7 @@ indexedTrainDataRDD
            * Step 2.5 - A long lineage may cause a StackOverFlow error in the JVM.
            * So, trigger a checkpointing once in a while.
            */
-          if (roundNum % solverOptions.checkpointFreq == 0) {
+          if (roundNum % sO.checkpointFreq == 0) {
             indexedPrimalsRDD.checkpoint()
             indexedCacheRDD.checkpoint()
             indexedLocalProcessedData.checkpoint()
@@ -434,18 +434,18 @@ indexedTrainDataRDD
            */
           // Obtain duality gap after each communication round
           val debugModel: StructSVMModel[X, Y] = globalModel.clone()
-          if (solverOptions.doWeightedAveraging) {
+          if (sO.doWeightedAveraging) {
             debugModel.updateWeights(weightedAveragesOfPrimals._1)
             debugModel.updateEll(weightedAveragesOfPrimals._2)
           }
 
           val roundEvaluation =
-            if (solverOptions.debug && roundNum % solverOptions.debugMultiplier == 0) {
+            if (sO.debug && roundNum % sO.debugMultiplier == 0) {
               // If debug flag is enabled, make few more passes to obtain training error, gap, etc.
               evaluateModel(debugModel, roundNum)
             } else {
               // If debug flag isn't on, perform calculations that don't trigger a shuffle
-              val dual = -SolverUtils.objectiveFunction(debugModel.getWeights(), debugModel.getEll(), solverOptions.lambda)
+              val dual = -SolverUtils.objectiveFunction(debugModel.getWeights(), debugModel.getEll(), sO.lambda)
               val elapsedTime = getElapsedTimeSecs()
 
               RoundEvaluation(roundNum, elapsedTime, 0.0, dual, 0.0, 0.0, 0.0)

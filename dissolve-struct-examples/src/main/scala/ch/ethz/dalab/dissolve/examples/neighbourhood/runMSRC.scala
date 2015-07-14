@@ -258,6 +258,72 @@ object runMSRC {
           
    }
     
+    def greyIntensityVariance(image:ImageStack,mask:Array[Array[Array[Int]]], numSuperPixels:Int,maxColorValue:Int=255 ):Map[Int,Double]={
+     val colMod = image.getColorModel()
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
+     val  K=  Array.fill(numSuperPixels){-1}
+     val  n = Array.fill(numSuperPixels){0}
+     val Sum= Array.fill(numSuperPixels){0.0}
+     val Sum_sqr = Array.fill(numSuperPixels){0.0}
+     
+          
+       
+          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+            val lab = mask(x)(y)(z)
+            val lastK = K(lab)
+            val lastn = n(lab)
+            val lastSum = Sum(lab)
+            val lastSum_sqr = Sum_sqr(lab)
+            val grey = image.getVoxel(x,y,z).asInstanceOf[Int]
+            if(lastK==(-1))
+              K(lab)=grey
+            n(lab) = lastn+1
+            Sum(lab)=lastSum+ grey-K(lab)
+            Sum_sqr(lab)=lastSum_sqr+(grey-K(lab)) *(grey -K(lab))
+       
+        }
+          val variances = for( l<-0 until numSuperPixels) yield{
+            ((Sum_sqr(l) - (Sum(l)*Sum(l))/n(l))/n(l))/(maxColorValue*3)//TODO figure out how to properly normalize variance 
+          }
+          ((0 until numSuperPixels) zip variances).toMap 
+   }
+    
+    
+    
+    def colorIntensityVariance(image:ImageStack,mask:Array[Array[Array[Int]]], numSuperPixels:Int, maxColorValue:Int=255):Map[Int,Double]={
+     val colMod = image.getColorModel()
+        val xDim = image.getWidth
+        val yDim = image.getHeight
+        val zDim = image.getSize
+     val  K=  Array.fill(numSuperPixels){-1}
+     val  n = Array.fill(numSuperPixels){0}
+     val Sum= Array.fill(numSuperPixels){0.0}
+     val Sum_sqr = Array.fill(numSuperPixels){0.0}
+     
+          
+       
+          for( x<- 0 until xDim; y<-0 until yDim ; z <- 0 until zDim){
+            val lab = mask(x)(y)(z)
+            val lastK = K(lab)
+            val lastn = n(lab)
+            val lastSum = Sum(lab)
+            val lastSum_sqr = Sum_sqr(lab)
+            val col = image.getVoxel(x,y,z).asInstanceOf[Int]
+            val grey = colMod.getRed(col)/3 + colMod.getGreen(col)/3 + colMod.getBlue(col)/3
+            if(lastK==(-1))
+              K(lab)=grey
+            n(lab) = lastn+1
+            Sum(lab)=lastSum+ grey-K(lab)
+            Sum_sqr(lab)=lastSum_sqr+(grey-K(lab)) *(grey -K(lab))
+       
+        }
+          val variances = for( l<-0 until numSuperPixels) yield{
+            ((Sum_sqr(l) - (Sum(l)*Sum(l))/n(l))/n(l))/(maxColorValue*3) //TODO figure out how to properly normalize variance 
+          }
+          ((0 until numSuperPixels) zip variances).toMap 
+   }
    
    def greyHist  (image:ImageStack,mask:Array[Array[Array[Int]]],histBinsPerCol:Int,histWidt:Int, maxColorValue:Int=255):Map[Int,Array[Double]]={
         val xDim = image.getWidth
@@ -338,7 +404,7 @@ object runMSRC {
 
  
    
-   def genMSRCsupPixV2 ( numClasses:Int,S:Int,M:Double ,imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false, debugLabelInFeat:Boolean=false, printMask:Boolean=false, slicNormalizePerClust:Boolean=true, featAddAvgInt:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
+   def genMSRCsupPixV2 ( numClasses:Int,S:Int,M:Double ,imageDataSource:String, groundTruthDataSource:String,  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] ,randomSeed:Int =(-1), runName:String = "_", isSquare:Boolean=false,doNotSplit:Boolean=false, debugLabelInFeat:Boolean=false, printMask:Boolean=false, slicNormalizePerClust:Boolean=true, featAddAvgInt:Boolean=false, featAddIntensityVariance:Boolean=false, featAddOffsetColumn:Boolean=false, recompFeat:Boolean=false):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
     
     //distFn:((Double,Double)=>Double),sumFn:(Double,Double)=>Double,normFn:(Double,Int)=>Double, //TODO remove me
      val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
@@ -365,6 +431,8 @@ object runMSRC {
 
          val mPath = if(M==S.asInstanceOf[Double]) "" else "M"+M
          val intFeatPath = if(featAddAvgInt) "t" else ""
+         val varFeatPath = if(featAddIntensityVariance) "v" else ""
+         val offSetCnstFeatPath = if(featAddOffsetColumn) "of" else ""
          val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping2"
          val colorMapF = new File(colorMapPath)
          val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[Int,Int]](colorMapPath)  else  new HashMap[Int,Int]()
@@ -386,20 +454,21 @@ object runMSRC {
         val nameNoExt = fName.substring(0,fName.length()-4)
         val rawImagePath =  rawImgDir+"/"+ fName
         
-        val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath +runName+".graph2"
-        val maskpath = rawImgDir+"/"+ nameNoExt +superType+ S+"_"+mPath+intFeatPath +runName+".mask"
-        val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+S+"_"+mPath+intFeatPath +runName+".ground2"
-        val perPixLabelsPath = groundTruthDir+"/"+nameNoExt+superType+S+"_"+mPath+intFeatPath+runName+".pxground2"
-        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+runName+".labels2"
+        val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".graph2"
+        val maskpath = rawImgDir+"/"+ nameNoExt +superType+ S+"_"+mPath +runName+".mask"
+        val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+S+"_"+mPath+runName+".ground2"
+        val perPixLabelsPath = groundTruthDir+"/"+nameNoExt+superType+S+"_"+mPath+runName+".pxground2"
+        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".labels2"
         
         val cacheMaskF = new File(maskpath)
         val cacheGraphF = new File(graphCachePath)
         val cahceLabelsF =  new File(outLabelsPath)
+       
         var imgSrcBidDepth=(-1)
         
 
         
-        if(cacheGraphF.exists() && cahceLabelsF.exists()){//Check if its cached 
+        if(!recompFeat&&cacheGraphF.exists() && cahceLabelsF.exists()){//Check if its cached 
           
           val outLabels = GraphUtils.readObjectFromFile[GraphLabels](outLabelsPath)
           val outGraph =  GraphUtils.readObjectFromFile[GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)]](graphCachePath)
@@ -485,8 +554,10 @@ object runMSRC {
         
         val tMask = System.currentTimeMillis()
         val mask = if( cacheMaskF.exists())  {
+          println("But Mask Found")
           GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](maskpath) 
         } else {
+          println("and Mask also not Found")
           if(isSquare)
              allGr.calcSimpleSquaresSupPix
           else
@@ -530,6 +601,7 @@ object runMSRC {
         val groundTruthpath =  groundTruthDir+"/"+ nameNoExt+"_GT"+extension
         val openerGT = new Opener();
         val imgGT = openerGT.openImage(groundTruthpath);
+        println("Now Opening: "+groundTruthpath)
         val gtStack = imgGT.getStack
         assert(xDim==gtStack.getWidth)
         assert(yDim==gtStack.getHeight)
@@ -627,7 +699,7 @@ object runMSRC {
        }
      //loss greater than 1
      
-      assert(colorToLabelMap.size ==numClasses)
+      assert(colorToLabelMap.size ==numClasses, " Num Ground Truth Colors Found "+colorToLabelMap.size +" but numClasses set to "+numClasses)
       if(colorToLabelMap.size!=numClasses){
         println("[WARNING] The input numClasses"+numClasses+" is not equal to the number of distinct colors found in the ground truth "+colorToLabelMap.size)
       }
@@ -809,6 +881,9 @@ object runMSRC {
       assert(sO.useLoopyBP)
       assert(sO.featIncludeMeanIntensity)
     }
+    sO.featAddOffsetColumn=options.getOrElse("featAddOffsetColumn","false").toBoolean
+    sO.featAddIntensityVariance=options.getOrElse("featAddIntensityVariance","false").toBoolean
+    val recompFeat=options.getOrElse("recompFeat","false").toBoolean
     
     if(sO.slicCompactness==(-1.0)){
       sO.slicCompactness=sO.superPixelSize.asInstanceOf[Double]
@@ -891,7 +966,7 @@ object runMSRC {
         }
     }
     
-    val runCFG=Option(new File(sO.dataFilesDir+"/"+sO.runName+"_run.cfg")).get
+    val runCFG=new File(sO.dataFilesDir+"/"+sO.runName+"_run.cfg")
     if(!runCFG.exists()){
       val pw = new PrintWriter(new File(sO.dataFilesDir+"/"+sO.runName+"_run.cfg"))
       pw.write(options.toString)
@@ -923,7 +998,8 @@ object runMSRC {
      val xDim = mask.length
      val yDim = mask(0).length
      val zDim = mask(0)(0).length
-     val numSupPix = mask(xDim-1)(yDim-1)(zDim-1)+5 //TODO is this correct always ?
+     val numSupPix = max(mask.flatten.flatten)+1 //+1 because the id's start at 0 
+    
       val bitDep = image.getBitDepth()
         val isColor = if(bitDep==8) false else true //TODO maybe this is not the best way to check for color in the image
         //TODO the bit depth should give me the max value which the hist should span over 
@@ -949,7 +1025,7 @@ object runMSRC {
           combine
           }
           
-          if(sO.featIncludeMeanIntensity){
+          val feat2=if(sO.featIncludeMeanIntensity){
           val avgInts = colorAverageIntensity1(image,mask)
           val out= coreFeat.map( (a:(Int,Array[Double]))=> { 
             val key = a._1
@@ -961,6 +1037,32 @@ object runMSRC {
           else{
             coreFeat
           }
+          
+          val feat3=if(sO.featAddIntensityVariance){
+           val newFeat = colorIntensityVariance(image,mask,numSupPix)
+          val out= feat2.map( (a:(Int,Array[Double]))=> { 
+            val key = a._1
+            val pastF = a._2
+            (key , pastF++Array(newFeat.get(key).get))            
+          })
+          out
+         }
+         else{
+           feat2
+         }
+         
+         if(sO.featAddOffsetColumn){
+           val newFeat =  ((0 until numSupPix) zip List.fill(numSupPix){1.0}).toMap
+          val out= feat3.map( (a:(Int,Array[Double]))=> { 
+            val key = a._1
+            val pastF = a._2
+            (key , pastF++Array(newFeat.get(key).get))            
+          })
+          out
+         }
+         else{
+           feat3
+         }
           
           
         }
@@ -984,7 +1086,7 @@ object runMSRC {
           combine
          }
          
-         if(sO.featIncludeMeanIntensity){
+         val feat2=if(sO.featIncludeMeanIntensity){
           val avgInts = greyAverageIntensity1(image,mask)
           val out= coreFeat.map( (a:(Int,Array[Double]))=> { 
             val key = a._1
@@ -996,6 +1098,32 @@ object runMSRC {
          else{
            coreFeat
          }
+         
+         val feat3=if(sO.featAddIntensityVariance){
+           val newFeat = greyIntensityVariance(image,mask,numSupPix)
+          val out= feat2.map( (a:(Int,Array[Double]))=> { 
+            val key = a._1
+            val pastF = a._2
+            (key , pastF++Array(newFeat.get(key).get))            
+          })
+          out
+         }
+         else{
+           feat2
+         }
+         
+         if(sO.featAddOffsetColumn){
+           val newFeat =  ((0 until numSupPix) zip List.fill(numSupPix){1.0}).toMap
+          val out= feat3.map( (a:(Int,Array[Double]))=> { 
+            val key = a._1
+            val pastF = a._2
+            (key , pastF++Array(newFeat.get(key).get))            
+          })
+          out
+         }
+         else{
+           feat3
+         }
           
        }      
    }
@@ -1003,7 +1131,7 @@ object runMSRC {
     
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(sO.numClasses, sO.superPixelSize, sO.slicCompactness,sO.imageDataFilesDir, sO.groundTruthDataFilesDir, featFn2, sO.dataRandSeed, sO.runName, sO.squareSLICoption, sO.trainTestEqual,sO.putLabelIntoFeat,sO.debugPrintSuperPixImg,sO.slicNormalizePerClust,sO.featIncludeMeanIntensity) 
+    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(sO.numClasses, sO.superPixelSize, sO.slicCompactness,sO.imageDataFilesDir, sO.groundTruthDataFilesDir, featFn2, sO.dataRandSeed, sO.runName, sO.squareSLICoption, sO.trainTestEqual,sO.putLabelIntoFeat,sO.debugPrintSuperPixImg,sO.slicNormalizePerClust,sO.featIncludeMeanIntensity,sO.featAddIntensityVariance,sO.featAddOffsetColumn,recompFeat) 
    
     
     
@@ -1220,12 +1348,16 @@ object runMSRC {
     println("Label to Color Mapping "+colorlabelMap)
     println("Internal Class Freq:  \t"+classFreqFound)
     
+     def bToS( a:Boolean)={if(a)"t"else"f"}
+       
+    
     val newLabels = sO.sampleFrac+","+ (if(sO.doWeightedAveraging) "t" else "f")+","+ 
             (if(sO.onlyUnary) "t" else "f") +","+(if(sO.squareSLICoption) "t" else "f")+","+ sO.superPixelSize+","+ sO.dataSetName+","+( if(sO.trainTestEqual)"t" else "f")+","+
             sO.inferenceMethod+","+sO.dbcfwSeed+","+ (if(sO.dataGenGreyOnly) "t" else "f")+","+ (if(sO.compPerPixLoss) "t" else "f")+","+ sO.dataGenNeighProb+","+ sO.featHistSize+","+
             sO.featCoOcurNumBins+","+ (if(sO.useLoopyBP) "t" else "f")+","+ (if(sO.useMPLP) "t" else "f")+","+ (if(sO.slicNormalizePerClust) "t" else "f")+","+ sO.dataGenOsilNoise+","+ sO.dataRandSeed+","+
-            sO.dataGenHowMany+","+sO.slicCompactness+","+( if(sO.putLabelIntoFeat) "t" else "f" )+","+sO.dataAddedNoise
-          
+            sO.dataGenHowMany+","+sO.slicCompactness+","+( if(sO.putLabelIntoFeat) "t" else "f" )+","+sO.dataAddedNoise+","+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+
+            bToS(sO.featAddOffsetColumn)+","+bToS(sO.featAddIntensityVariance)
+    
     
     
     println("#EndScore#,%d,%s,%s,%d,%.3f,%.3f,%s,%d,%d,%.3f,%s,%d,%d,%s,%s,%d,%s,%f,%f,%d,%s,%s,%.3f,%.3f,%s,%s".format(

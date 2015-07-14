@@ -102,6 +102,8 @@ class SolverOptions[X, Y] extends Serializable {
   var useLoopyBP:Boolean=false
   var useMPLP:Boolean=false
   var slicNormalizePerClust:Boolean=true
+  var featAddOffsetColumn:Boolean=false
+  var featAddIntensityVariance:Boolean=false
   // DBCFW specific params
   var H: Int = 5 // Number of data points to sample in each round of CoCoA (= number of local coordinate updates)
   var sampleFrac: Double = 0.5
