@@ -104,6 +104,21 @@ class SolverOptions[X, Y] extends Serializable {
   var slicNormalizePerClust:Boolean=true
   var featAddOffsetColumn:Boolean=false
   var featAddIntensityVariance:Boolean=false
+  
+  var recompFeat:Boolean=false
+  var featUniqueIntensity:Boolean=false
+  var featUnique2Hop:Boolean=false
+  var maxColorValue:Int=255
+  var dataDepUseIntensity:Boolean=true
+  var dataDepUseIntensityByNeighSD:Boolean=false
+  var dataDepUseIntensityBy2NeighSD:Boolean=false
+  var dataDepUseUniqueness:Boolean=false
+  
+  
+  
+  
+  
+  
   // DBCFW specific params
   var H: Int = 5 // Number of data points to sample in each round of CoCoA (= number of local coordinate updates)
   var sampleFrac: Double = 0.5

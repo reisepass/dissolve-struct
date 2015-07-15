@@ -40,6 +40,7 @@ import java.io._
 import scala.util.Random
 import java.awt.image.ColorModel
 import java.awt.Color
+import scala.collection.mutable.ListBuffer
  
 
 object runMSRC {
@@ -106,12 +107,12 @@ object runMSRC {
         val yDim = image.getHeight
         val zDim = image.getSize
         val col =  image.getColorModel
-        val binWidth = maxColor/binsPerColor
+        val binWidth = (maxColor+1)/binsPerColor.asInstanceOf[Double]
         val maxBin = (binsPerColor-1)*binsPerColor*binsPerColor+(binsPerColor-1)*binsPerColor+(binsPerColor-1)+1
         def whichBin(r:Int,g:Int,b:Int):Int={
-          val rBin = min(r/binWidth,binsPerColor-1)
-          val gBin = min(g/binWidth,binsPerColor-1)
-          val bBin = min(b/binWidth,binsPerColor-1)
+          val rBin = min((r/binWidth).asInstanceOf[Int],binsPerColor-1)
+          val gBin = min((g/binWidth).asInstanceOf[Int],binsPerColor-1)
+          val bBin = min((b/binWidth).asInstanceOf[Int],binsPerColor-1)
           rBin*(binsPerColor*binsPerColor)+gBin*binsPerColor+bBin
         }
         val fillCont = (0 until numSuperPix).toList.map { key => (key -> Array.fill(maxBin,maxBin){0}) }.toMap
@@ -354,7 +355,7 @@ object runMSRC {
         val maxAbsValue = maxColorValue  
         
         
-        val binWidth = maxAbsValue/histBins.asInstanceOf[Double]
+        val binWidth = (maxAbsValue+1)/histBins.asInstanceOf[Double]
         val whichBin = (a:Int)=>{ (a/binWidth).asInstanceOf[Int]}
         val xDim = image.getWidth
         val yDim = image.getHeight
@@ -734,6 +735,357 @@ object runMSRC {
   }
      
   
+   
+   def genMSRCsupPixV3 ( sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] , featureFn:(ImageStack,Array[Array[Array[Int]]],Int,SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>Array[Array[Double]] , afterFeatureFn:(ImageStack,Array[Array[Array[Int]]], IndexedSeq[Node[Vector[Double]]],Int,SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>Array[Node[Vector[Double]]] ):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]])={
+    
+     
+     val numClasses:Int= sO.numClasses
+     val S:Int = sO.superPixelSize
+     val M:Double= sO.slicCompactness
+     val imageDataSource:String= sO.imageDataFilesDir
+     val groundTruthDataSource:String=  sO.groundTruthDataFilesDir
+     val randomSeed:Int =  sO.dataRandSeed
+     val runName:String =  sO.runName
+     val isSquare:Boolean= sO.squareSLICoption
+     val doNotSplit:Boolean= sO.trainTestEqual 
+     val debugLabelInFeat:Boolean=sO.putLabelIntoFeat 
+     val  printMask:Boolean=sO.debugPrintSuperPixImg 
+     val slicNormalizePerClust:Boolean=sO.slicNormalizePerClust 
+     val featAddAvgInt:Boolean=sO.featIncludeMeanIntensity 
+     val featAddIntensityVariance:Boolean=sO.featAddIntensityVariance 
+     val featAddOffsetColumn:Boolean=sO.featAddOffsetColumn
+     val recompFeat:Boolean= sO.recompFeat
+    
+    //distFn:((Double,Double)=>Double),sumFn:(Double,Double)=>Double,normFn:(Double,Int)=>Double, //TODO remove me
+     val random = if(randomSeed==(-1)) new Random() else new Random(randomSeed)
+      val rawImgDir =  imageDataSource  
+      val groundTruthDir = groundTruthDataSource  
+       val lotsofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp")))
+       val lotsofTIF = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tif")))
+       val lotsofTIFF = lotsofTIF ++ Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tiff")))
+       val allFiles =( lotsofTIFF ++ lotsofBMP).flatten.toArray
+       val extension=if(lotsofBMP.get.size>0 ){
+         assert(lotsofTIFF.flatten.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
+         ".bmp"
+       }
+       else if(lotsofTIFF.size>0){
+         assert(lotsofBMP.get.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
+         ".tif"
+       }
+       else
+         ".tif"
+       
+         
+       
+       val superType = if(isSquare) "_square_" else "_SLIC_"
+
+         val mPath = if(M==S.asInstanceOf[Double]) "" else "M"+M
+         val intFeatPath = if(featAddAvgInt) "t" else ""
+         val varFeatPath = if(featAddIntensityVariance) "v" else ""
+         val offSetCnstFeatPath = if(featAddOffsetColumn) "of" else ""
+         val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping2"
+         val colorMapF = new File(colorMapPath)
+         val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[Int,Int]](colorMapPath)  else  new HashMap[Int,Int]()
+         val classCountPath = rawImgDir+"/classCountMap"+superType+S+"_"+mPath +runName+".classCount"
+         val classCountF = new File(classCountPath)
+         val oldClassCountFound = classCountF.exists()
+         val totalClassCount = if(oldClassCountFound) GraphUtils.readObjectFromFile[HashMap[Int,Double]](classCountPath) else new HashMap[Int,Double]()
+     
+         val transProbPath = rawImgDir+"/transitionProbabilityMatrix"+superType+S+"_"+mPath +runName+".transProb"
+         val transProbF = new File(transProbPath)
+         val transProbFound = transProbF.exists()
+         val transProb = if(transProbFound) GraphUtils.readObjectFromFile[Array[Array[Double]]](transProbPath) else Array.fill(numClasses,numClasses){0.0}
+         var totalConn= if(transProbFound) 1.0 else 0.0
+         
+        
+        assert(allFiles.size>0)
+        val allData = for( fI <- 0 until allFiles.size) yield {
+        val fName = allFiles(fI)
+        val nameNoExt = fName.substring(0,fName.length()-4)
+        val rawImagePath =  rawImgDir+"/"+ fName
+        
+        val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".graph2"
+        val maskpath = rawImgDir+"/"+ nameNoExt +superType+ S+"_"+mPath +runName+".mask"
+        val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+S+"_"+mPath+runName+".ground2"
+        val perPixLabelsPath = groundTruthDir+"/"+nameNoExt+superType+S+"_"+mPath+runName+".pxground2"
+        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".labels2"
+        
+        val cacheMaskF = new File(maskpath)
+        val cacheGraphF = new File(graphCachePath)
+        val cahceLabelsF =  new File(outLabelsPath)
+       
+        var imgSrcBidDepth=(-1)
+        
+
+        
+        if(!recompFeat&&cacheGraphF.exists() && cahceLabelsF.exists()){//Check if its cached 
+          
+          val outLabels = GraphUtils.readObjectFromFile[GraphLabels](outLabelsPath)
+          val outGraph =  GraphUtils.readObjectFromFile[GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)]](graphCachePath)
+           new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
+        } 
+        else{
+        println("No cache found for "+nameNoExt+" computing now..")
+        val tStartPre = System.currentTimeMillis()
+        val opener = new Opener();
+        val img = opener.openImage(rawImagePath);
+        val aStack = img.getStack
+        val bitDep = aStack.getBitDepth()
+        if(imgSrcBidDepth==(-1))
+          imgSrcBidDepth=bitDep
+        if(imgSrcBidDepth!=(-1))
+          assert(bitDep==imgSrcBidDepth,"All images need to have the same bitDepth")
+        val isColor = if(bitDep==8) false else true //TODO mabye this is not the best way to check for color in the image 
+        val colMod = aStack.getColorModel()
+        val xDim = aStack.getWidth
+        val yDim = aStack.getHeight
+        val zDim = aStack.getSize
+        
+        
+        
+
+        val copyImage = Array.fill(xDim, yDim, zDim) { 0}
+        var largest = 0;
+        var smallest = 0;
+        for (x <- 0 until xDim; y <- 0 until yDim; z <- 0 until zDim) {
+          copyImage(x)(y)(z) = aStack.getVoxel(x, y, z).asInstanceOf[Int] //TODO this may be causing an inaccuracy on the image color. Question is why is Imagej outputing Doubles....
+          if(copyImage(x)(y)(z)>largest)
+            largest=copyImage(x)(y)(z)
+          if(copyImage(x)(y)(z)<smallest)
+            smallest = copyImage(x)(y)(z)
+        }
+        
+        val distFnCol = (a: (Int, Int, Int), b: (Int, Int, Int)) => sqrt(Math.pow(a._1 - b._1, 2) + Math.pow(a._2 - b._2, 2) + Math.pow(a._3 - b._3, 2))
+        val sumFnCol =  (a: (Int, Int, Int), b: (Int, Int, Int)) => ((a._1 + b._1, a._2 + b._2, a._3 + a._3))
+        val normFnCol = (a: (Int, Int, Int), n: Int)             => {
+          
+                   
+          ((a._1 / n, a._2 / n, a._3 / n))}
+
+        val distFn = if(isColor) { 
+          ( a:Int, b:Int) => distFnCol((colMod.getRed(a.asInstanceOf[Int]),colMod.getGreen(a.asInstanceOf[Int]),colMod.getBlue(a.asInstanceOf[Int])),(colMod.getRed(b.asInstanceOf[Int]),colMod.getGreen(b.asInstanceOf[Int]),colMod.getBlue(b.asInstanceOf[Int])))  
+        } else {
+          (a:Int,b:Int)=> sqrt(Math.pow(a-b,2))
+        }
+        
+        val rollingAvgFn = if(isColor){
+          (a:Int,b:Int,n:Int)=>{
+            
+            val totalSum= sumFnCol((colMod.getRed(a)*(n-1),colMod.getGreen(a)*(n-1),colMod.getBlue(a)*(n-1)),(colMod.getRed(b),colMod.getGreen(b),colMod.getBlue(b)))
+            val cAvg = normFnCol(totalSum,n)
+            new Color(cAvg._1,cAvg._2,cAvg._3).getRGB()
+          }
+        }
+        else{
+          (a:Int,b:Int,n:Int)=>{
+            val sum = a*n + b
+            (sum/(n+1)).asInstanceOf[Int]
+          }
+        }
+        
+        val sumFn = if(isColor) 
+          (a:Int,b:Int) => {
+            
+         val c= sumFnCol((colMod.getRed(a),colMod.getGreen(a),colMod.getBlue(a)),(colMod.getRed(b),colMod.getGreen(b),colMod.getBlue(b)))
+         new Color(c._1,c._2,c._3).getRGB() //TODO I bet this is not the same encoding ImageJ uses
+           }else
+          (a:Int,b:Int)=> a+b
+        
+        val normFn = if(isColor)
+          (a:Int,n:Int) => {
+            val c= normFnCol( (colMod.getRed(a.asInstanceOf[Int]),colMod.getGreen(a.asInstanceOf[Int]),colMod.getBlue(a.asInstanceOf[Int])),n)
+            new Color(c._1,c._2,c._3).getRGB()  //TODO I bet this is not the same encoding ImageJ uses
+          }
+          else
+            (a:Int,n:Int) => round(a/n)
+          
+          
+        val allGr =  new SLIC[Int](distFn, rollingAvgFn, normFn, copyImage, S, 15, M,minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false,USE_CLUSTER_MAX_NORMALIZING=slicNormalizePerClust)   
+        
+        val tMask = System.currentTimeMillis()
+        val mask = if( cacheMaskF.exists())  {
+          println("But Mask Found")
+          GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](maskpath) 
+        } else {
+          println("and Mask also not Found")
+          if(isSquare)
+             allGr.calcSimpleSquaresSupPix
+          else
+            allGr.calcSuperPixels 
+          }
+        println("Calculate SuperPixels time: "+(System.currentTimeMillis()-tMask))
+        
+        
+        if(printMask)
+          printSuperPixels(mask,img,300,"_supPix_"+fI+"_"+S+"_"+mPath) 
+        if(!cacheMaskF.exists())
+         GraphUtils.writeObjectToFile(maskpath,mask)//save a chace 
+     
+         val tFindCenter = System.currentTimeMillis()
+         val (supPixCenter, supPixSize) = allGr.findSupPixelCenterOfMassAndSize(mask)
+         println( "Find Center mass time: "+(System.currentTimeMillis()-tFindCenter))
+         val tEdges = System.currentTimeMillis()
+    val edgeMap = allGr.findEdges_simple(mask, supPixCenter)
+    println("Find Graph Connections time: "+(System.currentTimeMillis()-tEdges))
+
+    
+    
+    
+    
+    val keys = supPixCenter.keySet.toList.sorted
+    assert(keys.equals((0 until keys.size).toList),"The Superpixel id counter skipped something "+keys.mkString(","))
+    val numSupPix = keys.size
+    val outEdgeMap = edgeMap
+    
+    
+    
+     /*
+      * 
+      * 
+      * 
+      */
+     //Construct Ground Truth 
+     val tGround = System.currentTimeMillis()
+        val groundTruthpath =  groundTruthDir+"/"+ nameNoExt+"_GT"+extension
+        val openerGT = new Opener();
+        val imgGT = openerGT.openImage(groundTruthpath);
+        println("Now Opening: "+groundTruthpath)
+        val gtStack = imgGT.getStack
+        assert(xDim==gtStack.getWidth)
+        assert(yDim==gtStack.getHeight)
+        assert(zDim==gtStack.getSize)
+        
+        
+        val labelCount=   if(colorToLabelMap.keySet.size>0) new AtomicInteger(colorToLabelMap.keySet.size) else new AtomicInteger(0)
+      
+        
+        val labelCountsPerS =  Array.fill(keys.size){ new HashMap[Int,Int]()}
+        val topCountPerS =  Array.fill(keys.size){ 0} 
+        val topLabelPerS = Array.fill(keys.size){-1}
+        
+        for ( x <- 0 until xDim; y<- 0 until yDim; z<- 0 until zDim){
+          val spxid = mask(x)(y)(z)
+          val col = gtStack.getVoxel(x,y,z).asInstanceOf[Int]
+          val lab = colorToLabelMap.getOrElse(col, { val newLab = labelCount.getAndIncrement; colorToLabelMap.put(col,newLab); newLab })
+          val lastCount = labelCountsPerS(spxid).getOrElse(lab,0)
+          labelCountsPerS(spxid).put(lab,lastCount+1)
+          if( (lastCount+1)>topCountPerS(spxid)){
+            topCountPerS(spxid)=lastCount+1
+            topLabelPerS(spxid)=lab
+          }
+          
+          if(!oldClassCountFound){
+            val oldC = totalClassCount.getOrElse(lab,0.0)
+            totalClassCount.put(lab,oldC+1.0)
+          }
+            
+        }
+          val groundTruthMap =  ( (0 until keys.size) zip topLabelPerS).toMap
+        
+        
+        println("Ground Truth Blob Mapping: "+(System.currentTimeMillis()-tGround))
+         GraphUtils.writeObjectToFile(groundCachePath,groundTruthMap)
+        
+          val tFeat = System.currentTimeMillis()
+    val featureVectors =  featureFn(aStack,mask,numSupPix,sO)
+      
+      /*
+      if(debugLabelInFeat){ //TODO this should be moved into the afterFeatureFn
+      
+      val tmp = for(id <-0 until keys.size) yield{
+       val lab=  groundTruthMap.get(id).get
+       val feat = Array.fill(10){random.nextDouble()}
+       feat(0)=lab.asInstanceOf[Double]
+       (id, feat)
+      }
+       tmp.toMap
+       * 
+       */
+      
+      
+   
+     
+    
+   
+          println("Compute Features per Blob: "+(System.currentTimeMillis()-tFeat))
+    val maxId = max(supPixCenter.keySet)
+    val nodesOne = for ( id <- 0 until keys.size) yield{
+      Node(id,Vector(featureVectors(id)) , collection.mutable.Set(outEdgeMap.get(id).get.toSeq:_*))
+        }
+    val outNodes = afterFeatureFn(aStack,mask,nodesOne,numSupPix,sO)
+    val outGraph = new GraphStruct[breeze.linalg.Vector[Double],(Int,Int,Int)](Vector(outNodes),maskpath) 
+     GraphUtils.writeObjectToFile(graphCachePath,outGraph)    
+  
+         
+         
+        val labelsInOrder = (0 until groundTruthMap.size).map(a=>groundTruthMap.get(a).get)
+        val outLabels = new GraphLabels(Vector(labelsInOrder.toArray),numClasses,groundTruthpath)
+         GraphUtils.writeObjectToFile(outLabelsPath,outLabels)
+         
+              if(!transProbFound){
+            
+            edgeMap.foreach((a:(Int,Set[Int]))=>{
+              val leftN = a._1
+              val leftClass = labelsInOrder(leftN)
+              val neigh = a._2
+             
+              neigh.foreach { thisNeigh => {
+                val rightClass = labelsInOrder(thisNeigh)
+                transProb(leftClass)(rightClass)+=1.0
+                transProb(rightClass)(leftClass)+=1.0
+                totalConn+=2.0
+              } }
+            })
+            
+          }
+         
+         //TODO remove debugging 
+        GraphUtils.printSupPixLabels_Int(outGraph,outLabels,0,nameNoExt+"_"+"_idMap_",colorMap=colorToLabelMap.toMap.map(_.swap))
+        //GraphUtils.printBMPFromGraphInt(outGraph,outLabels,0,nameNoExt+"_"+"_true_cnst",colorMap=colorToLabelMap.toMap.map(_.swap))
+    
+          
+         println("Total Preprocessing time for "+nameNoExt+" :"+(System.currentTimeMillis()-tStartPre))
+         new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
+        
+       }
+     
+       }
+     //loss greater than 1
+     
+      assert(colorToLabelMap.size ==numClasses, " Num Ground Truth Colors Found "+colorToLabelMap.size +" but numClasses set to "+numClasses)
+      if(colorToLabelMap.size!=numClasses){
+        println("[WARNING] The input numClasses"+numClasses+" is not equal to the number of distinct colors found in the ground truth "+colorToLabelMap.size)
+      }
+      GraphUtils.writeObjectToFile(colorMapPath,colorToLabelMap)
+      
+      val classFreq = if(!oldClassCountFound){
+        val totalSupP = totalClassCount.values.sum 
+        val classFreq = totalClassCount.map( (a:(Int,Double))=>{
+          a._1 -> a._2/totalSupP
+        })
+        GraphUtils.writeObjectToFile(classCountPath,classFreq)
+        classFreq
+      }
+      else
+        totalClassCount
+        
+      val outTransProb = if(transProbFound) transProb else {
+        assert(totalConn>0.0)
+        for( l <- 0 until numClasses; r<- 0 until numClasses){
+        transProb(l)(r)=transProb(l)(r)/totalConn
+      }
+          GraphUtils.writeObjectToFile(transProbPath,transProb)
+        transProb
+      }
+   
+      val shuffleIdx = random.shuffle((0 until allData.size).toList)
+      val (trainIDX,testIDX) = if(!doNotSplit) shuffleIdx.splitAt(round(allData.size/2)) else ((0 until allData.size).toList,(0 until allData.size).toList)
+      val  training = trainIDX.map { idx => allData(idx) }.toIndexedSeq
+      val  test = testIDX.map{idx => allData(idx)}.toIndexedSeq
+       println("First Image has "+training(0).pattern.size +" superPixels")
+      return (training,test,colorToLabelMap.toMap,classFreq.toMap,outTransProb)
+  }
+     
   
   
   
@@ -753,6 +1105,165 @@ object runMSRC {
     println("Options:: "+options)
     runStuff(options)
   }
+  
+  
+  
+  
+    val featFn3 = (image:ImageStack,mask:Array[Array[Array[Int]]],numSupPix:Int,sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>{
+     val xDim = mask.length
+     val yDim = mask(0).length
+     val zDim = mask(0)(0).length
+     
+    
+   val histBinsPerCol = sO.featHistSize/3
+   val histBinsPerGray = sO.featHistSize
+   val histCoGrayBins = sO.featCoOcurNumBins
+   val histCoColorBins = sO.featCoOcurNumBins/3
+   
+ 
+   val out = Array.fill(numSupPix){ new  ListBuffer[Double]}
+      val bitDep = image.getBitDepth()
+        val isColor = if(bitDep==8) false else true //TODO maybe this is not the best way to check for color in the image
+        //TODO the bit depth should give me the max value which the hist should span over 
+        
+        if(isColor){
+          
+          
+          
+          if(sO.featIncludeMeanIntensity){
+          colorAverageIntensity1(image,mask).foreach( (a:(Int,Double))=> {
+            out(a._1)++=List(a._2) 
+            
+          })
+          }
+          
+          if(sO.featHistSize>0){
+            assert(sO.featHistSize%3==0)
+             colorhist(image,mask,histBinsPerCol,255 / histBinsPerCol).foreach( (a:(Int,Array[Double]))=> {out(a._1)++=a._2 })
+          }
+         if((sO.featCoOcurNumBins>0)){
+            coOccurancePerSuperRGB(mask, image, numSupPix, 2).foreach( (a:(Int,Array[Double]))=> {out(a._1)++=a._2 })
+          }
+                 
+          if(sO.featAddIntensityVariance){
+           colorIntensityVariance(image,mask,numSupPix).foreach( (a:(Int,Double))=> {out(a._1)++=List(a._2) })
+         }
+         if(sO.featAddOffsetColumn){
+          ((0 until numSupPix) zip List.fill(numSupPix){1.0}).toMap.foreach( (a:(Int,Double))=> {out(a._1)++=List(a._2) })
+         }
+          
+          
+        }
+       else{
+         
+         if(sO.featIncludeMeanIntensity){
+          greyAverageIntensity1(image,mask).foreach( (a:(Int,Double))=> {
+            
+            out(a._1)++=List(a._2) })
+          }
+          
+          if(sO.featHistSize>0){
+             greyHist(image,mask,histBinsPerGray,255 / (histBinsPerGray)).foreach( (a:(Int,Array[Double]))=> {out(a._1)++=a._2 })
+          }
+         if((sO.featCoOcurNumBins>0)){
+            greyCoOccurancePerSuper(image, mask, histCoGrayBins).foreach( (a:(Int,Array[Double]))=> {out(a._1)++=a._2 })
+          }
+                 
+          if(sO.featAddIntensityVariance){
+           greyIntensityVariance(image,mask,numSupPix).foreach( (a:(Int,Double))=> {out(a._1)++=List(a._2) })
+         }
+         if(sO.featAddOffsetColumn){
+          ((0 until numSupPix) zip List.fill(numSupPix){1.0}).toMap.foreach( (a:(Int,Double))=> {out(a._1)++=List(a._2) })
+         }
+         
+        
+          
+       }   
+      val oo = for ( i<- 0 until numSupPix) yield{ out(i).toArray}
+      oo.toArray
+   }
+    
+  val afterFeatFn1 =(image:ImageStack,mask:Array[Array[Array[Int]]], nodes: IndexedSeq[Node[Vector[Double]]] , numSupPix:Int,sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>{
+    
+    
+ 
+    if(nodes(0).avgValue==Double.MinValue){
+        if(sO.isColor){
+          val intens = colorAverageIntensity1(image, mask, sO.maxColorValue)
+          for( i <- 0 until numSupPix)
+            nodes(i).avgValue=intens.get(i).get
+        }
+        else{
+          val intens = greyAverageIntensity1(image, mask, sO.maxColorValue)
+          for( i <- 0 until numSupPix)
+            nodes(i).avgValue=intens.get(i).get
+        }
+        
+      }
+    
+    
+    if(sO.featUniqueIntensity){
+      
+      
+      
+      val gintens = new ListBuffer[Double]
+      val gneighAvg = new ListBuffer[Double]
+      val gneighVar = new ListBuffer[Double]
+      val gneigh2hAvg = new ListBuffer[Double]
+      val gneighh2Var = new ListBuffer[Double]
+      
+      for( i <- 0 until numSupPix){
+        val xi = nodes(i)
+        gintens++=List(xi.avgValue)
+        val neighIntens = xi.connections.map { neighId => nodes(neighId).avgValue }.toList
+        val neighAvg=sum(neighIntens)/neighIntens.length 
+        nodes(i).neighMean= neighAvg
+        gneighAvg++=List(neighAvg)
+        
+        val allIntens = List(neighIntens, List(xi.avgValue)).flatten
+        val neighVar = variance(allIntens)
+        nodes(i).neighVariance = neighVar
+        gneighVar++=List(neighVar)
+        
+        if(sO.featUnique2Hop){
+        val hop2Neigh = xi.connections.map{ neighId => nodes(neighId).connections.toList}.toList.flatten.toSet
+        val hop2Intens = hop2Neigh.map { neighId => nodes(neighId).avgValue }.toList
+        val hop2Avg = sum(hop2Intens)/hop2Intens.length
+        nodes(i).hop2NeighMean=hop2Avg
+        gneigh2hAvg++=List(hop2Avg)
+        val hop2Var = variance(hop2Intens)
+        nodes(i).hop2NeighVar=hop2Var
+        gneighh2Var++=List(hop2Var)
+        }
+        
+      }
+      
+
+      val nor_intens =  normalize(DenseVector(gintens.toArray))
+      val nor_neighAvg = normalize(DenseVector(gneighAvg.toArray))
+      val nor_neighVar = normalize(DenseVector(gneighVar.toArray))
+      val nor_neigh2hAvg = normalize(DenseVector(gneigh2hAvg.toArray))
+      val nor_neighh2Var = normalize(DenseVector(gneighh2Var.toArray))
+      
+      
+      val out = nodes.map { old =>  { 
+        
+        val i = old.idx
+        val f = Vector(Array(nor_intens(old.idx)-nor_neighAvg(old.idx),nor_intens(old.idx)/nor_neighAvg(old.idx),nor_neighVar(old.idx))++
+            (if(sO.featUnique2Hop) Array((nor_intens(old.idx)-nor_neigh2hAvg(old.idx)),nor_intens(old.idx)/nor_neigh2hAvg(old.idx),nor_neighh2Var(old.idx),
+                (nor_neigh2hAvg(old.idx)-nor_neighAvg(old.idx)),nor_neigh2hAvg(old.idx)/nor_neighAvg(old.idx),
+                (nor_neighh2Var(old.idx)-nor_neighVar(old.idx)),nor_neighh2Var(old.idx)/nor_neighVar(old.idx)) else Array[Double]() ) 
+            ++old.features.toArray)
+        new Node[Vector[Double]](i, f,old.connections,nor_intens(i),nor_neighAvg(i),nor_neighVar(i),nor_neigh2hAvg(i),nor_neighh2Var(i))
+      }}
+      
+      out.toArray
+    }
+    else
+      nodes.toArray
+  } 
+  
+  
   def runStuff(options: Map[String, String]) {
     //
     //TODO Remove debug
@@ -879,15 +1390,24 @@ object runMSRC {
     sO.modelPairwiseDataDependent = options.getOrElse("modelPairwiseDataDependent", "false").toBoolean
     if(sO.modelPairwiseDataDependent){
       assert(sO.useLoopyBP)
-      assert(sO.featIncludeMeanIntensity)
+   //   assert(sO.featIncludeMeanIntensity)
     }
-    sO.featAddOffsetColumn=options.getOrElse("featAddOffsetColumn","false").toBoolean
-    sO.featAddIntensityVariance=options.getOrElse("featAddIntensityVariance","false").toBoolean
-    val recompFeat=options.getOrElse("recompFeat","false").toBoolean
-    
     if(sO.slicCompactness==(-1.0)){
       sO.slicCompactness=sO.superPixelSize.asInstanceOf[Double]
     }
+    sO.featAddOffsetColumn=options.getOrElse("featAddOffsetColumn","false").toBoolean
+    sO.featAddIntensityVariance=options.getOrElse("featAddIntensityVariance","false").toBoolean
+    sO.recompFeat=options.getOrElse("recompFeat","false").toBoolean
+    sO.featUnique2Hop=options.getOrElse("featUnique2Hop","false").toBoolean
+    sO.featUniqueIntensity = options.getOrElse("featUniqueIntensity","false").toBoolean
+    sO.dataDepUseIntensity=options.getOrElse("dataDepUseIntensity","false").toBoolean
+    sO.dataDepUseIntensityByNeighSD=options.getOrElse("dataDepUseIntensityByNeighSD","false").toBoolean
+    sO.dataDepUseIntensityBy2NeighSD=options.getOrElse("dataDepUseIntensityBy2NeighSD","false").toBoolean
+    sO.dataDepUseUniqueness=options.getOrElse("dataDepUseUniqueness","false").toBoolean
+  
+    
+    
+    
     /**
      * Some local overrides
      */
@@ -935,7 +1455,8 @@ object runMSRC {
         if(sO.dataGenGreyOnly)
           GraphUtils.genGreyfullSquaresDataSuperNoise(sO.dataGenHowMany,sO.dataGenCanvasSize,sO.dataGenSquareSize,sO.dataGenSparsity,sO.numClasses,
             sO.dataGenSquareNoise,sO.dataAddedNoise,
-            sO.dataFilesDir,sO.dataRandSeed)
+            sO.dataFilesDir,sO.dataRandSeed,
+            sO.dataGenOsilNoise,sO.superPixelSize)
         else{
           if(!sO.dataGenEnforNeigh){
             GraphUtils.genColorfullSquaresDataSuperNoise(sO.dataGenHowMany,sO.dataGenCanvasSize,sO.dataGenSquareSize,sO.dataGenSparsity,sO.numClasses,
@@ -984,10 +1505,9 @@ object runMSRC {
        
     
     
-   
+   /*
      
-      //  featureFn:(ImageStack,Array[Array[Array[Int]]])=>Map[Int,Array[Double]] 
-    //TODO REMOVE DEBUG new method 
+   
    val histBinsPerCol = sO.featHistSize/3
    val histBinsPerGray = sO.featHistSize
    val histCoGrayBins = sO.featCoOcurNumBins
@@ -1129,14 +1649,17 @@ object runMSRC {
    }
   // 
     
+   
+   
+ 
     
     //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-    val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV2(sO.numClasses, sO.superPixelSize, sO.slicCompactness,sO.imageDataFilesDir, sO.groundTruthDataFilesDir, featFn2, sO.dataRandSeed, sO.runName, sO.squareSLICoption, sO.trainTestEqual,sO.putLabelIntoFeat,sO.debugPrintSuperPixImg,sO.slicNormalizePerClust,sO.featIncludeMeanIntensity,sO.featAddIntensityVariance,sO.featAddOffsetColumn,recompFeat) 
-   
+   val (ootrainData,ootestData, oocolorlabelMap, ooclassFreqFound,ootransProb) = genMSRCsupPixV2(sO.numClasses, sO.superPixelSize, sO.slicCompactness,sO.imageDataFilesDir, sO.groundTruthDataFilesDir, featFn2, sO.dataRandSeed, sO.runName, sO.squareSLICoption, sO.trainTestEqual,sO.putLabelIntoFeat,sO.debugPrintSuperPixImg,sO.slicNormalizePerClust,sO.featIncludeMeanIntensity,sO.featAddIntensityVariance,sO.featAddOffsetColumn,sO.recompFeat) 
+  */
+   val (trainData,testData, colorlabelMap, classFreqFound,transProb) = genMSRCsupPixV3(sO,featFn3,afterFeatFn1)
     
     
-    
-    println("Train SgreyHistize:"+trainData.size)
+   println("Train SgreyHistize:"+trainData.size)
     println("Test Size:"+testData.size)
     
     
@@ -1204,9 +1727,37 @@ object runMSRC {
     
     
     
-    val maxGradBin = 2
-    val graidientFunc=(a:Double,b:Double)=>{ if(Math.abs(a-b)<0.2) 0 else 1}
+    var numGraidBins = 2
+    val graidientFunc= if(sO.dataDepUseIntensity) { numGraidBins = 2; (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ if(Math.abs(a.avgValue-b.avgValue)<0.2) 0 else 1} }
+    else if (sO.dataDepUseIntensityBy2NeighSD) {numGraidBins = 3;  (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
+      
+      val sd= Math.sqrt(a.hop2NeighVar)
+      val dif = (Math.abs(a.avgValue-b.avgValue)/sd)*20
+      
+      max(0,min(dif.asInstanceOf[Int],numGraidBins-1))
+     }  
     
+    } 
+    else if(sO.dataDepUseIntensityByNeighSD){
+      numGraidBins = 3;  (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
+      
+      val sd= Math.sqrt(a.neighVariance)
+      val dif = (Math.abs(a.avgValue-b.avgValue)/sd)*20
+      
+      max(0,min(dif.asInstanceOf[Int],numGraidBins-1))
+     }  
+    }
+    else{ // if ( dataDepUseUniqueness )
+      numGraidBins = 3;  (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
+      
+      val sdA= Math.sqrt(a.neighVariance)
+      val uniqA = Math.abs(a.avgValue-a.neighMean)/sdA
+      val sdB= Math.sqrt(b.neighVariance)
+      val uniqB = Math.abs(b.avgValue-b.neighMean)/sdB
+      
+      if(uniqA>1 && uniqB>1) 0 else if((uniqA>1 && uniqB<1 )||(uniqA<1 && uniqB>1 )) 1 else 2
+     }  
+    }
     
     
     sO.testDataRDD =
@@ -1228,7 +1779,7 @@ object runMSRC {
             sO.weighDownUnary,sO.weighDownPairwise, sO.LOSS_AUGMENTATION_OVERRIDE,
             false,sO.PAIRWISE_UPPER_TRI,sO.useMPLP,sO.useLoopyBP) }
         else {
-          new GraphSegDataDepPair(graidientFunc,maxGradBin,sO.runName,if(sO.useClassFreqWeighting)classFreqFound else null)
+          new GraphSegDataDepPair(graidientFunc,numGraidBins,sO.runName,if(sO.useClassFreqWeighting)classFreqFound else null)
         }
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](

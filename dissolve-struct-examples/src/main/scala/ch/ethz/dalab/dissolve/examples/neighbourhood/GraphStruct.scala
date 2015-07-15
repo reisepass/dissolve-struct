@@ -57,7 +57,6 @@ class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
 
   def graphNodes = graph
   def originMapFile = originalDataMappingFilePath
-  //TODO Add?? mapping from original xyz to nodes. For prediction we need something like this but it could be more efficient to just have a print out method that returns a xyz matrix 
   def getF(i: Int): Features = { graphNodes(i).features }
   def get(i: Int): Node[Features] = { graphNodes(i) }
   def getC(i: Int): scala.collection.mutable.Set[Int] = { graphNodes(i).connections }
@@ -74,7 +73,12 @@ class GraphStruct[Features, OriginalCoord](graph: Vector[Node[Features]],
 case class Node[Features](
   val idx: Int,
   val features: Features,
-  val connections: scala.collection.mutable.Set[Int]) extends Serializable {
+  val connections: scala.collection.mutable.Set[Int], 
+  var avgValue: Double=Double.MinValue,
+  var neighMean: Double=Double.MinValue,
+  var neighVariance: Double=Double.MinValue,
+  var hop2NeighMean:Double=Double.MinValue,
+  var hop2NeighVar: Double=Double.MinValue) extends Serializable {
   override def hashCode(): Int = {
     idx
   }
@@ -1002,7 +1006,7 @@ pw.close
     
   }
 
-    def genGreyfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1) ){
+    def genGreyfullSquaresDataSuperNoise(howMany: Int, canvasSize: Int, squareSize: Int, portionBackground: Double, numClasses: Int, featureNoise: Double,fineGrainNoise:Double=0.0, outputDir: String, randomSeed:Int=(-1) , osilatingNoise:Double=0.0, osilationWaveLength:Double=10){
     assert(canvasSize % squareSize == 0)
     assert(portionBackground <= 1)
     assert(featureNoise <= 1)
@@ -1041,17 +1045,23 @@ pw.close
       val imgGT: BufferedImage = new BufferedImage(canvasSize, canvasSize,
         BufferedImage.TYPE_INT_RGB);
 
+      val rPhaseX = random.nextDouble()*2*scala.math.Pi
+      val rPhaseY = random.nextDouble()*2*scala.math.Pi
+       val bPhaseX = random.nextDouble()*2*scala.math.Pi
+       val bPhaseY = random.nextDouble()*2*scala.math.Pi
+      val gPhaseX = random.nextDouble()*2*scala.math.Pi
+      val gPhaseY = random.nextDouble()*2*scala.math.Pi
       
-     
 
       for (x <- 0 until canvasSize; y <- 0 until canvasSize) {
 
         val myLabel = outLabel(x)(y)
         val uX = x/squareSize
         val uY = y/squareSize
-        val rN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
-        val gN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
-        val bN =  min(255, max(0, (( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+         
+        val rN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(rPhaseX))*cos(y*(1/osilationWaveLength)+(rPhaseY))+1)*255/2+  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._1 + featureNoise * uberNoise(uX)(uY)._1) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val gN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(bPhaseX))*cos(y*(1/osilationWaveLength)+(bPhaseY))+1)*255/2 +  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._2 + featureNoise * uberNoise(uX)(uY)._2) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
+        val bN =  min(255, max(0, (osilatingNoise*(cos(x*(1/osilationWaveLength)+(gPhaseX))*cos(y*(1/osilationWaveLength)+(gPhaseY))+1)*255/2 +  (1-osilatingNoise)*( (1-fineGrainNoise)*(((1 - featureNoise) * colorMap(myLabel)._3 + featureNoise * uberNoise(uX)(uY)._3) )+ fineGrainNoise*random.nextInt(255) )   ).asInstanceOf[Int]))
 
         val gray = (rN + gN +bN )/3
         val noisyColor = new Color(gray, gray, gray).getRGB

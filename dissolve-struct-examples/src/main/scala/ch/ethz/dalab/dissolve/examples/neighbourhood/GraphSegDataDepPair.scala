@@ -45,7 +45,7 @@ import cc.factorie.la.Tensor
 
 
 //This class assumes that at index 0 of the xFeature vector is the average intensity of the superpixel 
-class GraphSegDataDepPair(dataDepBinFn:((Double,Double)=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -96,7 +96,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Double,Double)=>Int),dataDepNumBins:Int
     for (idx <- 0 until xi.size) {
       val myLabel = yi.d(idx)
       xi.getC(idx).foreach { neighbour => { 
-        val dataDepBin=dataDepBinFn(xi.getF(idx)(0),xi.getF(neighbour)(0))
+        val dataDepBin=dataDepBinFn(xi.get(idx),xi.get(neighbour))
         pairwiseMats(dataDepBin)(myLabel, yi.d(neighbour)) += 1; pairwiseMats(dataDepBin)(yi.d(neighbour),myLabel) += 1 
         
       }}
@@ -233,7 +233,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Double,Double)=>Int),dataDepNumBins:Int
     val out=for(i <- 0 until xi.size) yield{
       
      val mutHashMap = new HashMap[Int,Int]
-     xi.getC(i).foreach { neigh => { mutHashMap.put(neigh,dataDepBinFn(xi.getF(i)(0),xi.getF(neigh)(0)))} }
+     xi.getC(i).foreach { neigh => { mutHashMap.put(neigh,dataDepBinFn(xi.get(i),xi.get(neigh)))} }
      mutHashMap.toMap
     }
     out.toArray
