@@ -115,6 +115,7 @@ class SolverOptions[X, Y] extends Serializable {
   var dataDepUseUniqueness:Boolean=false
   
   var slicMinBlobSize:Int=(-1)
+  var standardizeFeaturesByColumn:Boolean=false
   
   
   

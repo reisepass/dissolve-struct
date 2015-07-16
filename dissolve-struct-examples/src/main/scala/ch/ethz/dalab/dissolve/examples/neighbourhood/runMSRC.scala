@@ -27,6 +27,7 @@ import breeze.stats.DescriptiveStats._
 import breeze.stats._
 import breeze.numerics._
 import breeze.linalg._
+import breeze.util.JavaArrayOps
 import ij.plugin.Duplicator
 import scala.util.matching.Regex
 import java.io.File
@@ -1183,10 +1184,33 @@ object runMSRC {
         
           
        }   
-      val oo = for ( i<- 0 until numSupPix) yield{ out(i).toArray}
-      oo.toArray
+      
+      
+     val oo = (for ( i<- 0 until numSupPix) yield{ out(i).toArray}).toArray
+    
+    if(sO.standardizeFeaturesByColumn){
+     val oodMat = JavaArrayOps.array2DToDm(oo)
+     for(i<- 0 until oo(0).length){
+       val stdCol=standardize(oodMat(::,i))
+       oodMat(::,i):=stdCol
+     }
+      val outAgain=JavaArrayOps.dmDToArray2(oodMat)
+      outAgain
+    }
+    else{
+      oo
+    }
    }
     
+     def standardize (a:DenseVector[Double]):DenseVector[Double]={
+       val mysum = sum(a)
+       val mean = mysum/a.length
+       val mySD = stddev(a)
+       if(mySD==0.0 && mean==0.0 )
+         a
+       else
+       (a:-=mean):*=(1/mySD)
+     }
   val afterFeatFn1 =(image:ImageStack,mask:Array[Array[Array[Int]]], nodes: IndexedSeq[Node[Vector[Double]]] , numSupPix:Int,sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>{
     
     
@@ -1242,21 +1266,22 @@ object runMSRC {
         
       }
       
+     
 
-      val nor_intens =  normalize(DenseVector(gintens.toArray))
-      val nor_neighAvg = normalize(DenseVector(gneighAvg.toArray))
-      val nor_neighVar = normalize(DenseVector(gneighVar.toArray))
-      val nor_neigh2hAvg = normalize(DenseVector(gneigh2hAvg.toArray))
-      val nor_neighh2Var = normalize(DenseVector(gneighh2Var.toArray))
+      val nor_intens =  standardize(DenseVector(gintens.toArray))
+      val nor_neighAvg = standardize(DenseVector(gneighAvg.toArray))
+      val nor_neighVar = standardize(DenseVector(gneighVar.toArray))
+      val nor_neigh2hAvg = standardize(DenseVector(gneigh2hAvg.toArray))
+      val nor_neighh2Var = standardize(DenseVector(gneighh2Var.toArray))
       
-      val nor_iDif = normalize(nor_intens-nor_neighAvg)
-      val nor_iRatio = normalize(nor_intens:/nor_neighAvg)
-      val nor_iNDif = normalize(nor_intens-nor_neigh2hAvg)
-      val nor_iNRatio = normalize(nor_intens:/nor_neigh2hAvg)
-      val nor_iNN2Dif = normalize(nor_neigh2hAvg-nor_neigh2hAvg)
-      val nor_iNN2Ratio = normalize(nor_neigh2hAvg/nor_neigh2hAvg)
-      val nor_iNN2VarDif = normalize(nor_neighh2Var-nor_neighVar)
-      val nor_iNN2VarRatio = normalize(nor_neighh2Var/nor_neighVar)
+      val nor_iDif = standardize(nor_intens-nor_neighAvg)
+      val nor_iRatio = standardize(nor_intens:/nor_neighAvg)
+      val nor_iNDif = standardize(nor_intens-nor_neigh2hAvg)
+      val nor_iNRatio = standardize(nor_intens:/nor_neigh2hAvg)
+      val nor_iNN2Dif = standardize(nor_neigh2hAvg-nor_intens)
+      val nor_iNN2Ratio = standardize(nor_neigh2hAvg/nor_intens)
+      val nor_iNN2VarDif = standardize(nor_neighh2Var-nor_neighVar)
+      val nor_iNN2VarRatio = standardize(nor_neighh2Var/nor_neighVar)
       
       
       val out = nodes.map { old =>  { 
@@ -1418,7 +1443,7 @@ object runMSRC {
     sO.dataDepUseIntensityBy2NeighSD=options.getOrElse("dataDepUseIntensityBy2NeighSD","false").toBoolean
     sO.dataDepUseUniqueness=options.getOrElse("dataDepUseUniqueness","false").toBoolean
     sO.slicMinBlobSize = options.getOrElse("slicMinBlobSize","-1").toInt
-    
+    sO.standardizeFeaturesByColumn=options.getOrElse("standardizeFeaturesByColumn","false").toBoolean
     
     
     /**
