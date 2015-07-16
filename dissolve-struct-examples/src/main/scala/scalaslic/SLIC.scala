@@ -28,7 +28,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
                      rollingAvgFn: ((DataType, DataType, Int) => DataType),
                      normFn: ((DataType, Int) => DataType),
                      image: Array[Array[Array[DataType]]], S: Int, K:Int=5,inM:Double=Double.MinValue ,maxIterations: Int = 15, minChangePerIter: Double = 0.000001,
-                     connectivityOption: String = "Imperative", debug: Boolean = false, USE_CLUSTER_MAX_NORMALIZING:Boolean=true) {
+                     connectivityOption: String = "Imperative", debug: Boolean = false, USE_CLUSTER_MAX_NORMALIZING:Boolean=true,in_minBlobSize:Int=(-1)) {
 
   //TODO try out different tif image stacks and see what dim2 is 
 
@@ -44,7 +44,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
   val xS = if (xDim < S) xDim else S
   val yS = if (yDim < S) yDim else S
   val zS = if (zDim < S) zDim else S
-  val minBlobSize = (xS * yS * zS) / 2 //TODO check if this is the right minSize
+  val minBlobSize = if(in_minBlobSize>=0) in_minBlobSize else (xS * yS * zS) / 2 //TODO check if this is the right minSize
   //cpp code looks like its using this:  floor(round((xDim*yDim*zDim)/K)/4)   
   //i think floor(x/4) is the same as x >> 2
   val dx = Array(-1, 1, 0, 0, 0, 0)

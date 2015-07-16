@@ -782,6 +782,7 @@ object runMSRC {
          val mPath = if(M==S.asInstanceOf[Double]) "" else "M"+M
          val intFeatPath = if(featAddAvgInt) "t" else ""
          val varFeatPath = if(featAddIntensityVariance) "v" else ""
+         val minBlobSizePath = if(sO.slicMinBlobSize>=0) "mB"+sO.slicMinBlobSize else ""
          val offSetCnstFeatPath = if(featAddOffsetColumn) "of" else ""
          val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping2"
          val colorMapF = new File(colorMapPath)
@@ -804,11 +805,11 @@ object runMSRC {
         val nameNoExt = fName.substring(0,fName.length()-4)
         val rawImagePath =  rawImgDir+"/"+ fName
         
-        val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".graph2"
-        val maskpath = rawImgDir+"/"+ nameNoExt +superType+ S+"_"+mPath +runName+".mask"
-        val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+S+"_"+mPath+runName+".ground2"
-        val perPixLabelsPath = groundTruthDir+"/"+nameNoExt+superType+S+"_"+mPath+runName+".pxground2"
-        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +superType+S+"_"+mPath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".labels2"
+        val graphCachePath = rawImgDir+"/"+ nameNoExt +superType+S+"_"+mPath+minBlobSizePath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".graph2"
+        val maskpath = rawImgDir+"/"+ nameNoExt +superType+ S+"_"+mPath+minBlobSizePath +runName+".mask"
+        val groundCachePath = groundTruthDir+"/"+ nameNoExt+superType+S+"_"+mPath+minBlobSizePath+runName+".ground2"
+        val perPixLabelsPath = groundTruthDir+"/"+nameNoExt+superType+S+"_"+mPath+minBlobSizePath+runName+".pxground2"
+        val outLabelsPath = groundTruthDir+"/"+ nameNoExt +superType+S+"_"+mPath+minBlobSizePath+intFeatPath+varFeatPath+offSetCnstFeatPath+runName+".labels2"
         
         val cacheMaskF = new File(maskpath)
         val cacheGraphF = new File(graphCachePath)
@@ -900,7 +901,7 @@ object runMSRC {
             (a:Int,n:Int) => round(a/n)
           
           
-        val allGr =  new SLIC[Int](distFn, rollingAvgFn, normFn, copyImage, S, 15, M,minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false,USE_CLUSTER_MAX_NORMALIZING=slicNormalizePerClust)   
+        val allGr =  new SLIC[Int](distFn, rollingAvgFn, normFn, copyImage, S, 15, M,minChangePerIter = 0.002, connectivityOption = "Imperative", debug = false,USE_CLUSTER_MAX_NORMALIZING=slicNormalizePerClust, in_minBlobSize = sO.slicMinBlobSize )   
         
         val tMask = System.currentTimeMillis()
         val mask = if( cacheMaskF.exists())  {
@@ -916,8 +917,7 @@ object runMSRC {
         println("Calculate SuperPixels time: "+(System.currentTimeMillis()-tMask))
         
         
-        if(printMask)
-          printSuperPixels(mask,img,300,"_supPix_"+fI+"_"+S+"_"+mPath) 
+        
         if(!cacheMaskF.exists())
          GraphUtils.writeObjectToFile(maskpath,mask)//save a chace 
      
@@ -1002,7 +1002,11 @@ object runMSRC {
        * 
        */
       
-      
+      if(printMask){
+          printSuperPixels(mask,img,300,"_supPix_"+fI+"_"+S+"_"+mPath+minBlobSizePath)
+          printSuperPixels(mask,imgGT,110,"_supPix_"+fI+"_"+S+"_"+mPath+minBlobSizePath+"_GT") 
+          
+        }
    
      
     
@@ -1245,14 +1249,23 @@ object runMSRC {
       val nor_neigh2hAvg = normalize(DenseVector(gneigh2hAvg.toArray))
       val nor_neighh2Var = normalize(DenseVector(gneighh2Var.toArray))
       
+      val nor_iDif = normalize(nor_intens-nor_neighAvg)
+      val nor_iRatio = normalize(nor_intens:/nor_neighAvg)
+      val nor_iNDif = normalize(nor_intens-nor_neigh2hAvg)
+      val nor_iNRatio = normalize(nor_intens:/nor_neigh2hAvg)
+      val nor_iNN2Dif = normalize(nor_neigh2hAvg-nor_neigh2hAvg)
+      val nor_iNN2Ratio = normalize(nor_neigh2hAvg/nor_neigh2hAvg)
+      val nor_iNN2VarDif = normalize(nor_neighh2Var-nor_neighVar)
+      val nor_iNN2VarRatio = normalize(nor_neighh2Var/nor_neighVar)
+      
       
       val out = nodes.map { old =>  { 
         
         val i = old.idx
-        val f = Vector(Array(nor_intens(old.idx)-nor_neighAvg(old.idx),nor_intens(old.idx)/nor_neighAvg(old.idx),nor_neighVar(old.idx))++
-            (if(sO.featUnique2Hop) Array((nor_intens(old.idx)-nor_neigh2hAvg(old.idx)),nor_intens(old.idx)/nor_neigh2hAvg(old.idx),nor_neighh2Var(old.idx),
-                (nor_neigh2hAvg(old.idx)-nor_neighAvg(old.idx)),nor_neigh2hAvg(old.idx)/nor_neighAvg(old.idx),
-                (nor_neighh2Var(old.idx)-nor_neighVar(old.idx)),nor_neighh2Var(old.idx)/nor_neighVar(old.idx)) else Array[Double]() ) 
+        val f = Vector(Array(nor_iDif(old.idx),nor_iRatio(old.idx),nor_neighVar(old.idx))++
+            (if(sO.featUnique2Hop) Array(nor_iNDif(old.idx),nor_iNRatio(old.idx),nor_neighh2Var(old.idx),
+                (nor_iNN2Dif(old.idx)),nor_iNN2Ratio(old.idx),
+                (nor_neighh2Var(old.idx)-nor_neighVar(old.idx)),nor_iNN2VarRatio(old.idx)) else Array[Double]() ) 
             ++old.features.toArray)
         new Node[Vector[Double]](i, f,old.connections,nor_intens(i),nor_neighAvg(i),nor_neighVar(i),nor_neigh2hAvg(i),nor_neighh2Var(i))
       }}
@@ -1404,7 +1417,7 @@ object runMSRC {
     sO.dataDepUseIntensityByNeighSD=options.getOrElse("dataDepUseIntensityByNeighSD","false").toBoolean
     sO.dataDepUseIntensityBy2NeighSD=options.getOrElse("dataDepUseIntensityBy2NeighSD","false").toBoolean
     sO.dataDepUseUniqueness=options.getOrElse("dataDepUseUniqueness","false").toBoolean
-  
+    sO.slicMinBlobSize = options.getOrElse("slicMinBlobSize","-1").toInt
     
     
     
