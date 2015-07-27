@@ -262,7 +262,8 @@ class DBCFWSolverTuned[X, Y](
             sO.inferenceMethod,sO.dbcfwSeed, if(sO.dataGenGreyOnly) "t" else "f", if(sO.compPerPixLoss) "t" else "f", sO.dataGenNeighProb, sO.featHistSize,
             sO.featCoOcurNumBins, if(sO.useLoopyBP) "t" else "f", if(sO.useMPLP) "t" else "f", bToS(sO.slicNormalizePerClust), sO.dataGenOsilNoise, sO.dataRandSeed,
             sO.dataGenHowMany,sO.slicCompactness,bToS(sO.putLabelIntoFeat),sO.dataAddedNoise
-            )+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+","+bToS(sO.featAddIntensityVariance))
+            )+","+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+
+            ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist))
         //TODO need to add expID tag, maybe git Version 
 //test
    

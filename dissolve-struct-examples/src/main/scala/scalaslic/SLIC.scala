@@ -94,7 +94,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
         dy <- (-purterbSpace) until purterbSpace;
         dz <- (-purterbSpace) until purterbSpace
       } {
-        if (dx + x > 0 & dy + y > 0 & dz + z > 0 & dx + x < xDim & dy + y < yDim & dz + z < zDim) {
+        if (boundCheck(x+dx,y+dy,z+dz,xDim,yDim,zDim)) {
           val myCol = image(dx + x)(dy + y)(dz + z)
           var difSum = 0.0
           
@@ -799,6 +799,32 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
     return out
   }
 
+  def findEdges_trueIter(supPixelIdmask: Array[Array[Array[Int]]],numSuperPix:Int): Array[ scala.collection.mutable.Set[Int]] = {
+    val xDim = supPixelIdmask.length
+    val yDim =supPixelIdmask(0).length 
+    val zDim= supPixelIdmask(0)(0).length
+  
+    val conn = Array.fill(numSuperPix){scala.collection.mutable.Set[Int]()}
+    for( x <- 0 until xDim; y<- 0 until yDim; z <- 0 until zDim){
+     val me = supPixelIdmask(x)(y)(z)
+      for {
+        dx <- (-1) to 1;
+        dy <- (-1) to 1;
+        dz <- (-1) to 1
+      } {
+        if (boundCheck(x+dx,y+dy,z+dz,xDim,yDim,zDim)) {
+          val other = supPixelIdmask(x+dx)(y+dy)(z+dz)
+        
+         if(me!=other)
+           conn(me)+=(other)
+           
+        }
+    }
+    
+  }
+    conn
+  }
+  
   def findSupPixelBounds(supPixelId: Array[Array[Array[Int]]]): (Map[Int, List[DatumCord[DataType]]], Map[Int, HashMap[Int, Int]]) = {
 
     val cordWiseBlobs = HashMap[Int, List[DatumCord[DataType]]]()

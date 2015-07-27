@@ -45,11 +45,12 @@ import cc.factorie.la.Tensor
 
 
 //This class assumes that at index 0 of the xFeature vector is the average intensity of the superpixel 
-class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true,  loopyBPmaxIter:Int=10) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
   
+  val myLoopyBP = new MaximizeByBPLoopy_rw(loopyBPmaxIter)
 
   
   
@@ -209,7 +210,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
    
     if(counter<1) println("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
      
-    MaximizeByBPLoopy.maximize(labelParams,model)
+    myLoopyBP.maximize(labelParams,model)
     val mapLabelsBP: Array[Int] = (0 until numRegions).map {
       idx =>
         // assgn(pixelSeq(idx)).intValue

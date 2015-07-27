@@ -1,6 +1,7 @@
 package ch.ethz.dalab.dissolve.diagnostics
 
 import java.nio.file.Paths
+
 import org.scalatest.FlatSpec
 import org.scalatest.Inside
 import org.scalatest.Inspectors
@@ -26,6 +27,8 @@ import org.apache.spark.SparkConf
 import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import org.apache.spark.SparkContext
 
+
+ 
 object ChainTestAdapter_G {
 
   ////
@@ -70,23 +73,7 @@ object ChainTestAdapter_G {
 
   val data = trainData.toArray
   
-  /*
-  val conf = new SparkConf().setAppName(appName).setMaster("local")
-  val sc = new SparkContext(conf)
-  sc.setCheckpointDir("/home/mort/workspace/dissolve-struct/data/generated/debug" + "/checkpoint-files")
-  val trainDataRDD = sc.parallelize(trainData)
-
-  val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
-    new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
-      trainDataRDD,
-      myGraphSegObj,
-      solverOptions)
-
-
-  
-  val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = trainer.trainModel()
-*/
-  
+ 
    val lo = data(0)
   val numd = myGraphSegObj.featureFn(lo.pattern, lo.label).size
   
@@ -119,6 +106,7 @@ object ChainTestAdapter_G {
 
   }
 }
+
 
 object ChainTestAdapter {
   type X = Matrix[Double]
@@ -206,3 +194,4 @@ abstract class UnitSpec extends FlatSpec with Matchers with OptionValues with In
     w dot psi(lo, ystar)
 
 }
+

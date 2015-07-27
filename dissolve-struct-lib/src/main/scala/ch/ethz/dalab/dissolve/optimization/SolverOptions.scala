@@ -116,6 +116,17 @@ class SolverOptions[X, Y] extends Serializable {
   
   var slicMinBlobSize:Int=(-1)
   var standardizeFeaturesByColumn:Boolean=false
+  var featNeighHist:Boolean=false
+  var preStandardizeImagesFirst:Boolean = false
+  var featUseStdHist:Boolean=false
+  
+  
+  var globalMean:Double = Double.MinValue
+  var globalVar:Double = Double.MinValue
+  
+  var loopyBPmaxIter:Int=10;
+  var numDataDepGraidBins:Int=5;
+  
   
   
   
