@@ -8,7 +8,6 @@ scalaVersion := "2.10.5"
 
 libraryDependencies += "ch.ethz.dalab" %% "dissolvestruct" % "0.1-SNAPSHOT"
 
-
 libraryDependencies += "org.scala-lang.modules" %% "scala-pickling" % "0.10.0"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.10" % "2.0" % "test"
