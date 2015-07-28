@@ -325,7 +325,7 @@ class DBCFWSolverTuned[X, Y](
       }
       val (whichDataDepWasMaxWNorm,dataDepWasMaxWNorm,whichDataDepWasMinWNorm,dataDepWasMinWNorm) =w_maxPairWiseNorm
       
-      val newStats = " %.5f, %.5f, %.5f, %d, %.5f, %d, %.5f,".format(w_Norm,w_unaryNorm,w_pairWiseNorm,whichDataDepWasMaxWNorm,dataDepWasMaxWNorm,whichDataDepWasMinWNorm,dataDepWasMinWNorm)
+      val newStats = " %.6f, %.6f, %.6f, %d, %.6f, %d, %.6f,".format(w_Norm,w_unaryNorm,w_pairWiseNorm,whichDataDepWasMaxWNorm,dataDepWasMaxWNorm,whichDataDepWasMinWNorm,dataDepWasMinWNorm)
       
         println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %.6f, %.6f, %.6f, %.6f, %.6f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d, %s, %s, %.3f, %d, %d, %s, %s, %s, %.3f, %d, %d, %.3f, %s, %.3f"
         .format(sO.startTime, sO.runName,sO.gitVersion,elapsedTime, roundNum, dualityGap, primal,
@@ -335,7 +335,7 @@ class DBCFWSolverTuned[X, Y](
             sO.featCoOcurNumBins, if(sO.useLoopyBP) "t" else "f", if(sO.useMPLP) "t" else "f", bToS(sO.slicNormalizePerClust), sO.dataGenOsilNoise, sO.dataRandSeed,
             sO.dataGenHowMany,sO.slicCompactness,bToS(sO.putLabelIntoFeat),sO.dataAddedNoise
             )+","+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+
-            ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist)+","+ sO.numDataDepGraidBins+","+sO.loopyBPmaxIter+","+newStats+sO.dataDepMeth)
+            ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist)+","+ sO.numDataDepGraidBins+","+sO.loopyBPmaxIter+","+newStats+sO.dataDepMeth+","+model.weights.length)
         //TODO need to add expID tag, maybe git Version 
 //test
    

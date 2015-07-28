@@ -49,9 +49,41 @@ import scala.collection.mutable.ListBuffer
 
 /**
  * @author mort
+
+
  */
+
+
+
 object startupUtils {
   
+  
+  
+  def printMemory() {
+    val mb = 1024*1024;
+         
+        //Getting the runtime reference from system
+        val runtime = Runtime.getRuntime();
+         
+        System.out.println("##### Heap utilization statistics [MB] #####");
+         
+        //Print used memory
+        System.out.println("Used Memory:"
+            + (runtime.totalMemory() - runtime.freeMemory()) / mb);
+ 
+        //Print free memory
+        System.out.println("Free Memory:"
+            + runtime.freeMemory() / mb);
+         
+        //Print total available memory
+        System.out.println("Total Memory:" + runtime.totalMemory() / mb);
+ 
+        //Print Maximum available memory
+        System.out.println("Max Memory:" + runtime.maxMemory() / mb);
+
+        
+        
+  }
   
   def printSuperPixels(clusterAssign: Array[Array[Array[Int]]], imp2: ImagePlus, borderCol: Double = Int.MaxValue.asInstanceOf[Double], label: String = "NoName") {
     val imp2_pix = new Duplicator().run(imp2);
@@ -891,10 +923,10 @@ object startupUtils {
        val superType = if(isSquare) "_square_" else "_SLIC_"
 
          val mPath = if(M==S.asInstanceOf[Double]) "" else "M"+M
-         val intFeatPath = if(featAddAvgInt) "t" else ""
-         val varFeatPath = if(featAddIntensityVariance) "v" else ""
+         val intFeatPath = "" //if(featAddAvgInt) "t" else "" //I disabled this because the feature options are really complicated so i should just recompute it every time
+         val varFeatPath = "" //if(featAddIntensityVariance) "v" else ""  //I disabled this because the feature options are really complicated so i should just recompute it every time
+         val offSetCnstFeatPath = "" // if(featAddOffsetColumn) "of" else ""  //I disabled this because the feature options are really complicated so i should just recompute it every time
          val minBlobSizePath = if(sO.slicMinBlobSize>=0) "mB"+sO.slicMinBlobSize else ""
-         val offSetCnstFeatPath = if(featAddOffsetColumn) "of" else ""
          val colorMapPath =  rawImgDir+"/globalColorMap"+".colorLabelMapping2"
          val colorMapF = new File(colorMapPath)
          val colorToLabelMap = if(colorMapF.exists()) GraphUtils.readObjectFromFile[HashMap[Int,Int]](colorMapPath)  else  new HashMap[Int,Int]()
