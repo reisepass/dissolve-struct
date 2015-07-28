@@ -894,7 +894,7 @@ val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
     
    
     
-    val evenMore = (", %.5f, %.5f, %.5f").format(vocScores(0),vocScores(1),(if(vocScores.length>2) vocScores(2) else (-0.0)))
+    val evenMore = (" %.5f, %.5f, %.5f").format(vocScores(0),vocScores(1),(if(vocScores.length>2) vocScores(2) else (-0.0)))
     
     
     
