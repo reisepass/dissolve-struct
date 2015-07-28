@@ -2,21 +2,22 @@ package ch.ethz.dalab.dissolve.optimization
 
 import scala.collection.mutable.MutableList
 import scala.reflect.ClassTag
-
 import org.apache.spark.HashPartitioner
 import org.apache.spark.SparkContext.rddToPairRDDFunctions
 import org.apache.spark.rdd.RDD
-
 import breeze.linalg.DenseVector
 import breeze.linalg.SparseVector
 import breeze.linalg.Vector
 import breeze.linalg.max
 import breeze.linalg.min
+import breeze.linalg._
+import breeze.numerics._
 import ch.ethz.dalab.dissolve.classification.StructSVMModel
 import ch.ethz.dalab.dissolve.classification.Types.BoundedCacheList
 import ch.ethz.dalab.dissolve.classification.Types.Index
 import ch.ethz.dalab.dissolve.classification.Types.PrimalInfo
 import ch.ethz.dalab.dissolve.regression.LabeledObject
+import org.apache.spark.mllib.linalg.DenseVector
 
 /**
  * Train a structured SVM using the actual distributed dissolve^struct solver.
@@ -254,8 +255,79 @@ class DBCFWSolverTuned[X, Y](
         }
           //assert(dualityGap>0)
       def bToS( a:Boolean)={if(a)"t"else"f"}
+      
+      def w_Norm():Double={
+       val w = DenseVector(model.weights.toArray) 
+       norm(w) 
+      }
+      def w_unaryNorm():Double={
+          val w = DenseVector(model.weights.toArray) 
+        val pairwiseWlength = sO.numClasses*sO.numClasses* (if(sO.modelPairwiseDataDependent) sO.numDataDepGraidBins else 1)
+        val unaryLeng = w.length-pairwiseWlength
+        val unaryW=w(0 until unaryLeng)
+        assert(unaryW.length == unaryLeng)
+        norm(unaryW)
+      }
+      def w_pairWiseNorm():Double={
+        val w = DenseVector(model.weights.toArray) 
+        val pairwiseWlength = sO.numClasses*sO.numClasses* (if(sO.modelPairwiseDataDependent) sO.numDataDepGraidBins else 1)
+        val unaryLeng = w.length-pairwiseWlength
+        val pairW=w(unaryLeng to -1)
+        assert(pairW.length == pairwiseWlength)
+        norm(pairW)
+      }
+      def w_maxPairWiseNorm():(Int,Double,Int,Double)={
+        if(sO.modelPairwiseDataDependent){
+        val weightVec = DenseVector(model.weights.toArray) 
+        val pairwiseWlength = sO.numClasses*sO.numClasses*sO.numDataDepGraidBins
+        val unaryLeng = weightVec.length-pairwiseWlength
+        val pairW=weightVec(unaryLeng to -1)
+            
+        // Pairwise feature Vector
+        val pairwiseSize=sO.numClasses*sO.numClasses
+        val pairwiseMats = Array.fill(sO.numDataDepGraidBins){DenseMatrix.zeros[Double](sO.numClasses,sO.numClasses)}
+     
+        val unaryEnd = unaryLeng
+        val allNorms=for(i <- 0 until sO.numDataDepGraidBins) yield {
+          val startI = unaryEnd + ( i*pairwiseSize)
+          val endI = startI + pairwiseSize
+          val pairwiseFeatureVec = weightVec(startI until endI).toDenseVector
+           assert(pairwiseFeatureVec.size == sO.numClasses * sO.numClasses, "was ="+pairwiseFeatureVec.size  +" should have been= "+(sO.numClasses * sO.numClasses))
+           pairwiseMats(i)=pairwiseFeatureVec.toDenseMatrix.reshape(sO.numClasses, sO.numClasses)
+           
+                          
+            val thetaPairwise=pairwiseMats(i)
+            val curNorm =norm(pairwiseFeatureVec)
+            println("------------- Pairwise_Mat %d -------------  Norm( %.5f )".format(i,curNorm))
+            print("Diagonal: [[")
+            for(i <- 0 until thetaPairwise.rows ){
+              print("\t,%.3f".format(thetaPairwise(i,i)))
+            }
+            print("]]\n")
+            
+              for(r<- 0 until thetaPairwise.rows ){
+                for( c<- 0 until thetaPairwise.cols){
+                print("\t,%.3f".format(thetaPairwise(r,c)))
+              }
+                print("\n")
+            }
+ 
+           curNorm
+        }
+        val normsDV = DenseVector(allNorms.toArray)
         
-        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %f, %f, %f, %f, %f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d, %s, %s, %.3f, %d, %d, %s, %s, %s, %.3f, %d, %d, %.3f,%s,%.3f"
+        (argmax(normsDV),max(normsDV),argmin(normsDV),min(normsDV))
+        }
+        else{
+          ((-1),(-1.0),(-1),(-1.0))
+        }
+
+      }
+      val (whichDataDepWasMaxWNorm,dataDepWasMaxWNorm,whichDataDepWasMinWNorm,dataDepWasMinWNorm) =w_maxPairWiseNorm
+      
+      val newStats = " %.5f, %.5f, %.5f, %d, %.5f, %d, %.5f,".format(w_Norm,w_unaryNorm,w_pairWiseNorm,whichDataDepWasMaxWNorm,dataDepWasMaxWNorm,whichDataDepWasMinWNorm,dataDepWasMinWNorm)
+      
+        println("#RoundProgTag# ,%d, %s , %s , %.3f, %d, %.6f, %.6f, %.6f, %.6f, %.6f , %.2f, %s, %s, %s, %d, %s, %s, %s, %d, %s, %s, %.3f, %d, %d, %s, %s, %s, %.3f, %d, %d, %.3f, %s, %.3f"
         .format(sO.startTime, sO.runName,sO.gitVersion,elapsedTime, roundNum, dualityGap, primal,
             dual, trainError, testError,sO.sampleFrac, if(sO.doWeightedAveraging) "t" else "f", 
             if(sO.onlyUnary) "t" else "f" ,if(sO.squareSLICoption) "t" else "f" , sO.superPixelSize, sO.dataSetName, if(sO.trainTestEqual)"t" else "f",
@@ -263,7 +335,7 @@ class DBCFWSolverTuned[X, Y](
             sO.featCoOcurNumBins, if(sO.useLoopyBP) "t" else "f", if(sO.useMPLP) "t" else "f", bToS(sO.slicNormalizePerClust), sO.dataGenOsilNoise, sO.dataRandSeed,
             sO.dataGenHowMany,sO.slicCompactness,bToS(sO.putLabelIntoFeat),sO.dataAddedNoise
             )+","+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+
-            ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist))
+            ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist)+","+ sO.numDataDepGraidBins+","+sO.loopyBPmaxIter+","+newStats+sO.dataDepMeth)
         //TODO need to add expID tag, maybe git Version 
 //test
    

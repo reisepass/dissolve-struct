@@ -311,26 +311,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     val thetaPairwise = pairwiseWeights
 
     
-    if(counter<3){
-     println("w norm: "+norm(new DenseVector(weightVec.toArray)))
-    }
     
-    if(counter<1){
-      println("-------------Pairwise_Mat-------------")
-      print("Diagonal: [[")
-      for(i <- 0 until thetaPairwise.rows ){
-        print("\t,%.3f".format(thetaPairwise(i,i)))
-      }
-      print("]]\n\n")
-      
-        for(r<- 0 until thetaPairwise.rows ){
-          for( c<- 0 until thetaPairwise.cols){
-          print("\t,%.3f".format(thetaPairwise(r,c)))
-        }
-          print("\n")
-      }
-      
-    }
     
     // If yi is present, do loss-augmentation
     if (yi != null && !LOSS_AUGMENTATION_OVERRIDE) {

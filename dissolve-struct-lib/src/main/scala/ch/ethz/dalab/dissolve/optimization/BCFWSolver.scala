@@ -10,7 +10,6 @@ import scala.util.Random
 import ch.ethz.dalab.dissolve.classification.StructSVMModel
 import breeze.linalg._
 import breeze.numerics._
-import ch.ethz.dalab.dissolve.optimization.SolverUtils;
 import ch.ethz.dalab.dissolve.regression.LabeledObject
 
 import java.io.File

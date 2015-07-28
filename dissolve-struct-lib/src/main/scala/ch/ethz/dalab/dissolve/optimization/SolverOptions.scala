@@ -113,7 +113,8 @@ class SolverOptions[X, Y] extends Serializable {
   var dataDepUseIntensityByNeighSD:Boolean=false
   var dataDepUseIntensityBy2NeighSD:Boolean=false
   var dataDepUseUniqueness:Boolean=false
-  
+  var dataDepMeth:String = "dataDepUseIntensity"
+    
   var slicMinBlobSize:Int=(-1)
   var standardizeFeaturesByColumn:Boolean=false
   var featNeighHist:Boolean=false
@@ -126,6 +127,7 @@ class SolverOptions[X, Y] extends Serializable {
   
   var loopyBPmaxIter:Int=10;
   var numDataDepGraidBins:Int=5;
+  
   
   
   

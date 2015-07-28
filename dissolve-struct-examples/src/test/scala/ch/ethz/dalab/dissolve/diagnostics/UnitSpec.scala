@@ -26,7 +26,7 @@ import ch.ethz.dalab.dissolve.classification.StructSVMWithDBCFW
 import org.apache.spark.SparkConf
 import ch.ethz.dalab.dissolve.optimization.SolverOptions
 import org.apache.spark.SparkContext
-
+import ch.ethz.dalab.dissolve.examples.neighbourhood.startupUtils._
 
  
 object ChainTestAdapter_G {
