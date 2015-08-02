@@ -87,7 +87,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
       val x = a._1
       val y = a._2
       val z = a._3
-      var maxScore = Double.MaxValue
+      var maxScore = 0.0
       var bestMove = (0, 0, 0)
       for {
         dx <- (-purterbSpace) until purterbSpace;
@@ -572,7 +572,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
           val tC = System.currentTimeMillis()
           val center = centers(cIDX)
           for (
-            vX <- center.x - 2 * S until center.x + 2 * S; //TODO change back to 2*S
+            vX <- center.x - 2 * S until center.x + 2 * S; 
             vY <- center.y - 2 * S until center.y + 2 * S;
             vZ <- center.z - 2 * S until center.z + 2 * S
           ) {

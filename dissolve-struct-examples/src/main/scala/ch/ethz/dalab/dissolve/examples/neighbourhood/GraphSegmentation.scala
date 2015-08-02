@@ -36,13 +36,18 @@ import cc.factorie.infer.MaximizeByBPLoopy
 import cc.factorie.la.DenseTensor1
 import cc.factorie.la.Tensor
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true, USE_MPLP:Boolean=false, USE_LOOPYBP:Boolean=false, loopyBPmaxIter:Int=10) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true, USE_MPLP:Boolean=false, USE_LOOPYBP:Boolean=false, loopyBPmaxIter:Int=10, alsoWeighLossAugByFreq:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
   
     val myLoopyBP = new MaximizeByBPLoopy_rw(loopyBPmaxIter)
-
+  
+  val labelIDs = classFreqs.keySet.toList.sorted
+  assert(labelIDs==(0 until labelIDs.length).toList)
+  val lableFreqLoss = DenseVector(labelIDs.map { labl => classFreqs.get(labl).get }.toArray)
+  
+  
   
   assert (!(DISABLE_PAIRWISE&&DISABLE_UNARY), "Can not disable both pairwise and unary")
 
@@ -315,11 +320,13 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     
     // If yi is present, do loss-augmentation
     if (yi != null && !LOSS_AUGMENTATION_OVERRIDE) {
+       val freqLoss = if(alsoWeighLossAugByFreq) (lableFreqLoss:*=(1.0 / xi.size)) else (DenseVector(Array.fill(numClasses){1.0 / xi.size}))
       for (idx <- 0 until xi.size) { //TODO check if this is using correct indexs 
-        thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / xi.size //We are using a zero-one loss per y so here there are just constants
+        
+        thetaUnary(idx, ::) := thetaUnary(idx, ::) + freqLoss.t  //We are using a zero-one loss per y so here there are just constants
         // Loss augmentation step
         val k = yi.d(idx)
-        thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / xi.size //This is a zero loss b/c it cancels out the +1 for all non correct labels 
+        thetaUnary(idx, k) = thetaUnary(idx, k) - ( freqLoss(k)) //This is a zero loss b/c it cancels out the +1 for all non correct labels 
         //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
         //     a whole image but inside it uses zero-one loss for pixel comparison 
         //     this should be a function so it is common between the two uses 

@@ -22,7 +22,6 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import sys.process._
-import ij._
 import ij.io.Opener
 import breeze.linalg._
 import breeze.stats.DescriptiveStats._
@@ -44,7 +43,13 @@ import scala.util.Random
 import java.awt.image.ColorModel
 import java.awt.Color
 import scala.collection.mutable.ListBuffer
- 
+import ij.process.ImageProcessor
+import ij.process.ByteProcessor
+import ij.ImageStack
+import ij.IJ
+import ij.ImagePlus
+import scala.sys.process._
+
 
 
 /**
@@ -57,8 +62,114 @@ import scala.collection.mutable.ListBuffer
 
 object startupUtils {
   
+    
+  def splitLargeTiffStack(dataDir:String, howOften:Int){
+    splitLargeTiffStack(dataDir+"/Images",dataDir+"/GroundTruth",howOften)
+  }
+    def splitLargeTiffStack(rawImgDir:String,groundTruthDir:String, howOften:Int){
+      
+     val oldTifs =  Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tif"))).get
+     assert(oldTifs!=null&&oldTifs.size>0, "Did not find any .tif images in this directory. Rename tiff to tif if needed")
   
+     val workingDir = new java.io.File(rawImgDir.trim+"/..")
+     val backM = sys.process.Process(Seq("mkdir","backup"),workingDir)
+     if((backM.!)!=0)
+     { println("#WARNING# since the backup folder alreayd excists we are assuming these files have alright been properly split and will do nothing additionaly to the images");
+     return; 
+     }
+     sys.process.Process(Seq("mkdir","backup/Images"),workingDir).!!     
+     sys.process.Process(Seq("mkdir","backup/GroundTruth"),workingDir).!!
+     sys.process.Process(Seq("bash","-c","mv Images/* backup/Images/"),workingDir).!!
+     sys.process.Process(Seq("bash","-c","mv GroundTruth/* backup/GroundTruth/"),workingDir).!!
+     sys.process.Process(Seq("bash","-c","mv *.cfg backup/"),workingDir).!!
+     
+   val lotsofTIFF =  Option(new File(rawImgDir+"/../backup/Images").list).map(_.filter(_.endsWith(".tif"))).get
+     assert(lotsofTIFF!=null&&lotsofTIFF.size>0, "Did not find any .tif images in this directory. Rename tiff to tif if needed")
   
+     
+     for ( itr <- 0 until lotsofTIFF.size){
+       
+        val fileName = lotsofTIFF(itr)
+        val rawImagePath = rawImgDir+"/../backup/Images/"+fileName
+        val nameNoExt = fileName.substring(0,fileName.length()-4)
+        
+        val tStartPre = System.currentTimeMillis()
+        val opener = new Opener();
+        val img = opener.openImage(rawImagePath);
+        val rawStack = img.getStack
+        val bitDep = rawStack.getBitDepth()
+        val colMod = rawStack.getColorModel()
+        val xDim = rawStack.getWidth
+        val yDim = rawStack.getHeight
+        val zDim = rawStack.getSize
+        val groundTruthpath =  groundTruthDir+"/../backup/GroundTruth/"+ nameNoExt+"_GT"+".tif"
+        val openerGT = new Opener();
+        val imgGT = openerGT.openImage(groundTruthpath);
+        
+        val gtStack = imgGT.getStack
+        assert(xDim==gtStack.getWidth)
+        assert(yDim==gtStack.getHeight)
+        assert(zDim==gtStack.getSize)
+        val minDim = min(min(xDim,yDim),zDim)
+        val minCubSize = minDim/howOften
+        val subXCount = xDim/minCubSize
+        val subYCount = yDim/minCubSize
+        val subZCount = zDim/minCubSize
+        val remainderX = xDim%minCubSize
+        val remainederY = yDim%minCubSize
+        val remainederZ = zDim%minCubSize
+        
+        
+        var counter =0;
+        
+        val subImgRaw = Array.fill(subXCount){Array.fill(subYCount){Array.fill(subZCount){ new ImageStack()}}}
+        val subImgGT = Array.fill(subXCount){Array.fill(subYCount){Array.fill(subZCount){ new ImageStack()}}}
+          for ( subX <- 0 until subXCount; subY <- 0 until subYCount;subZ <- 0 until subZCount){  
+            val title = nameNoExt+"_subImg"+counter+".tif"
+            val titleGT = nameNoExt+"_subImg"+counter+"_GT.tif"
+            counter+=1;
+            val xSubDim =  (if(subX==(subXCount-1)) remainderX+minCubSize else minCubSize)
+            val ySubDim =  (if(subY==(subYCount-1)) remainederY+minCubSize else minCubSize)
+            val zSubDim = (if(subZ==subZCount-1) remainederZ+minCubSize else minCubSize)
+            val subimp = IJ.createImage(title," "+bitDep,xSubDim, ySubDim, zSubDim)
+            val subimpGT = IJ.createImage(titleGT," "+bitDep,xSubDim, ySubDim, zSubDim)
+            subImgRaw(subX)(subY)(subZ)=subimp.getStack
+            subImgGT(subX)(subY)(subZ)=subimpGT.getStack
+        }
+        
+        for ( x<- 0 until xDim ; y<- 0 until yDim; z<- 0 until zDim){
+          val subX = min(x/minCubSize,subXCount-1)
+          val subY = min(y/minCubSize,subYCount-1)
+          val subZ = min(z/minCubSize,subZCount-1)
+          val offSetX = subX*minCubSize
+          val offSetY = subY*minCubSize
+          val offSetZ = subZ*minCubSize
+          val localX = x-offSetX
+          val localY = y-offSetY
+          val localZ = z-offSetZ
+          subImgRaw(subX)(subY)(subZ).setVoxel(localX,localY,localZ,rawStack.getVoxel(x,y,z))
+          subImgGT(subX)(subY)(subZ).setVoxel(localX,localY,localZ,gtStack.getVoxel(x,y,z))
+        }
+        
+         for ( subX <- 0 until subXCount; subY <- 0 until subYCount;subZ <- 0 until subZCount){  
+            val title = nameNoExt+"_subImg"+subX+"-"+subY+"-"+subZ+".tif"
+            val titleGT = nameNoExt+"_subImg"+subX+"-"+subY+"-"+subZ+"_GT.tif"
+            
+            val xSubDim =  (if(subX==(subXCount-1)) remainderX+minCubSize else minCubSize)
+            val ySubDim =  (if(subY==(subYCount-1)) remainederY+minCubSize else minCubSize)
+            val zSubDim = (if(subZ==subZCount-1) remainederZ+minCubSize else minCubSize)
+            val subimp = IJ.createImage(title," "+bitDep,xSubDim, ySubDim, zSubDim)
+            val subimpgt = IJ.createImage(titleGT," "+bitDep,xSubDim, ySubDim, zSubDim)
+            subimp.setStack(subImgRaw(subX)(subY)(subZ))
+            subimpgt.setStack(subImgGT(subX)(subY)(subZ))
+          IJ.saveAs(subimp, "tif", rawImgDir+"/" + title); 
+          IJ.saveAs(subimpgt, "tif", groundTruthDir+"/" + titleGT);
+         }
+       
+       
+     }
+    }
+    
   def printMemory() {
     val mb = 1024*1024;
          

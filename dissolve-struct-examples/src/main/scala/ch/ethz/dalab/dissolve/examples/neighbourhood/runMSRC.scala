@@ -354,6 +354,7 @@ object runMSRC {
     */
     //
     
+    
     printMemory()
 
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
@@ -490,8 +491,9 @@ object runMSRC {
     sO.preStandardizeImagesFirst = options.getOrElse("preStandardizeImagesFirst" , "false").toBoolean
     sO.numDataDepGraidBins= options.getOrElse("numDataDepGraidBins","5").toInt
     sO.loopyBPmaxIter = options.getOrElse("loopyBPmaxIter","10").toInt
-    
-    
+    sO.alsoWeighLossAugByFreq = options.getOrElse("alsoWeighLossAugByFreq","false").toBoolean
+    val SPLIT_IMAGES = options.getOrElse("SPLIT_IMAGES","false").toBoolean
+    sO.splitImagesBy = options.getOrElse("splitImagesBy","-1").toInt
     
     
     /**
@@ -511,6 +513,14 @@ object runMSRC {
       //solverOptions.debugMultiplier = 1
     }
     
+   
+   if(SPLIT_IMAGES){
+     assert(!GEN_NEW_SQUARE_DATA,"We hault the execution here because it seems unlikely that one would set GEN_NEW_SQUARE_DATA and SPLIT_IMAGES to true, please adjust the input arguments")
+     assert(!GEN_TRY_TO_MATCH_GENERATED_DATA,"We hault the execution here because it seems unlikely that one would set GEN_TRY_TO_MATCH_GENERATED_DATA and SPLIT_IMAGES to true, please adjust the input arguments")
+     if(sO.splitImagesBy==(-1))
+       sO.splitImagesBy=2
+     splitLargeTiffStack(sO.dataFilesDir, sO.splitImagesBy)
+   }
     
    if(GEN_NEW_SQUARE_DATA||GEN_TRY_TO_MATCH_GENERATED_DATA){
            if(sO.dataGenSparsity==(-1))
@@ -747,9 +757,9 @@ val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
             DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,sO.runName,
             if(sO.useClassFreqWeighting) classFreqFound else null,
             sO.weighDownUnary,sO.weighDownPairwise, sO.LOSS_AUGMENTATION_OVERRIDE,
-            false,sO.PAIRWISE_UPPER_TRI,sO.useMPLP,sO.useLoopyBP,sO.loopyBPmaxIter) }
+            false,sO.PAIRWISE_UPPER_TRI,sO.useMPLP,sO.useLoopyBP,sO.loopyBPmaxIter,sO.alsoWeighLossAugByFreq) }
         else {
-          new GraphSegDataDepPair(graidientFunc,numDataDepGraidBins,sO.runName,if(sO.useClassFreqWeighting)classFreqFound else null, loopyBPmaxIter=sO.loopyBPmaxIter)
+          new GraphSegDataDepPair(graidientFunc,numDataDepGraidBins,sO.runName,if(sO.useClassFreqWeighting)classFreqFound else null, loopyBPmaxIter=sO.loopyBPmaxIter,alsoWeighLossAugByFreq=sO.alsoWeighLossAugByFreq)
         }
     val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
       new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](

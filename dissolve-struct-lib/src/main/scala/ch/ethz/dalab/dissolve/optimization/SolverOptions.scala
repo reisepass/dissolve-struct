@@ -127,7 +127,8 @@ class SolverOptions[X, Y] extends Serializable {
   
   var loopyBPmaxIter:Int=10;
   var numDataDepGraidBins:Int=5;
-  
+  var alsoWeighLossAugByFreq:Boolean=false;
+  var splitImagesBy:Int=(-1);
   
   
   

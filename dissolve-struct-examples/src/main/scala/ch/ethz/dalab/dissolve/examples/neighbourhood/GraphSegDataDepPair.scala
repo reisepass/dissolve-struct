@@ -45,13 +45,18 @@ import cc.factorie.la.Tensor
 
 
 //This class assumes that at index 0 of the xFeature vector is the average intensity of the superpixel 
-class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true,  loopyBPmaxIter:Int=10) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true,  loopyBPmaxIter:Int=10, alsoWeighLossAugByFreq:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
   
   val myLoopyBP = new MaximizeByBPLoopy_rw(loopyBPmaxIter)
-
+  
+ 
+  val labelIDs = classFreqs.keySet.toList.sorted
+  assert(labelIDs==(0 until labelIDs.length).toList)
+  val lableFreqLoss = DenseVector(labelIDs.map { labl => classFreqs.get(labl).get }.toArray)
+  
   
   
   //Convert the graph into one big feature vector 
@@ -104,7 +109,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
     }
     
     
-     //TODO REMOVE DEBUG just checking if this is how fold works 
+      
   val matS = yi.numClasses*yi.numClasses
   val outAll = DenseVector.zeros[Double](yi.numClasses*yi.numClasses*dataDepNumBins)
   for ( i <- 0 until dataDepNumBins) yield{
@@ -276,11 +281,13 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
     
     // If yi is present, do loss-augmentation
     if (yi != null && !LOSS_AUGMENTATION_OVERRIDE) {
+      val freqLoss = if(alsoWeighLossAugByFreq) (lableFreqLoss:*=(1.0 / xi.size)) else (DenseVector(Array.fill(numClasses){1.0 / xi.size}))
       for (idx <- 0 until xi.size) { //TODO check if this is using correct indexs 
-        thetaUnary(idx, ::) := thetaUnary(idx, ::) + 1.0 / xi.size //We are using a zero-one loss per y so here there are just constants
+        
+        thetaUnary(idx, ::) := thetaUnary(idx, ::) + freqLoss.t  //We are using a zero-one loss per y so here there are just constants
         // Loss augmentation step
         val k = yi.d(idx)
-        thetaUnary(idx, k) = thetaUnary(idx, k) - 1.0 / xi.size //This is a zero loss b/c it cancels out the +1 for all non correct labels 
+        thetaUnary(idx, k) = thetaUnary(idx, k) - ( freqLoss(k)) //This is a zero loss b/c it cancels out the +1 for all non correct labels 
         //This zero one loss is repeated code from the lossFn. lossFn gets loss for  
         //     a whole image but inside it uses zero-one loss for pixel comparison 
         //     this should be a function so it is common between the two uses 
