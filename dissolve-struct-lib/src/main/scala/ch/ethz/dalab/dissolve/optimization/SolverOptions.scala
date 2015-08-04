@@ -113,6 +113,7 @@ class SolverOptions[X, Y] extends Serializable {
   var dataDepUseIntensityByNeighSD:Boolean=false
   var dataDepUseIntensityBy2NeighSD:Boolean=false
   var dataDepUseUniqueness:Boolean=false
+  var dataDepUseUniquenessInOtherNeighbourhood:Boolean=false
   var dataDepMeth:String = "dataDepUseIntensity"
     
   var slicMinBlobSize:Int=(-1)
@@ -129,6 +130,7 @@ class SolverOptions[X, Y] extends Serializable {
   var numDataDepGraidBins:Int=5;
   var alsoWeighLossAugByFreq:Boolean=false;
   var splitImagesBy:Int=(-1);
+  var optimizeWithSubGraid:Boolean = false;
   
   
   

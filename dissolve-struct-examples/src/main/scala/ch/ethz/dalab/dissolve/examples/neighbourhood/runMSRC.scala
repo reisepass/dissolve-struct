@@ -43,6 +43,7 @@ import java.awt.image.ColorModel
 import java.awt.Color
 import scala.collection.mutable.ListBuffer
 import ch.ethz.dalab.dissolve.examples.neighbourhood.startupUtils._
+import ch.ethz.dalab.dissolve.optimization.SSGSolver
  
 
 object runMSRC {
@@ -196,10 +197,11 @@ object runMSRC {
       val binWidth = sO.maxColorValue/perCHistSize
       val neighHists= if(sO.isColor){
         val histPerSup=colorhist(image,mask,sO.featHistSize/3,binWidth,sO.maxColorValue)
+
         assert(histPerSup.get(0).get.length==sO.featHistSize)
         val neighHistPerSuper = for( i <- 0 until numSupPix) yield {
           val neigh=nodes(i).connections
-          var sumHists = DenseVector.zeros[Double](perCHistSize)
+          var sumHists = DenseVector.zeros[Double](sO.featHistSize)
           
           neigh.foreach { neighID => {
             sumHists=sumHists+DenseVector(histPerSup.get(neighID).get)
@@ -481,7 +483,9 @@ object runMSRC {
     sO.dataDepUseUniqueness=options.getOrElse("dataDepUseUniqueness","false").toBoolean
     if(sO.dataDepUseUniqueness)
       sO.dataDepMeth="dataDepUseUniqueness"
-    assert((sO.dataDepUseUniqueness:Int)+(sO.dataDepUseIntensityBy2NeighSD:Int)+(sO.dataDepUseIntensityByNeighSD:Int)+(sO.dataDepUseIntensity:Int )<=1)
+    if(sO.dataDepUseUniquenessInOtherNeighbourhood)
+      sO.dataDepMeth="dataDepUseUniquenessInOtherNeighbourhood"
+    assert((sO.dataDepUseUniqueness:Int)+(sO.dataDepUseIntensityBy2NeighSD:Int)+(sO.dataDepUseIntensityByNeighSD:Int)+(sO.dataDepUseIntensity:Int )+(sO.dataDepUseUniquenessInOtherNeighbourhood:Int )<=1)
    
 
     sO.slicMinBlobSize = options.getOrElse("slicMinBlobSize","-1").toInt
@@ -494,6 +498,7 @@ object runMSRC {
     sO.alsoWeighLossAugByFreq = options.getOrElse("alsoWeighLossAugByFreq","false").toBoolean
     val SPLIT_IMAGES = options.getOrElse("SPLIT_IMAGES","false").toBoolean
     sO.splitImagesBy = options.getOrElse("splitImagesBy","-1").toInt
+    sO.optimizeWithSubGraid = options.getOrElse("optimizeWithSubGraid","false").toBoolean
     
     
     /**
@@ -693,6 +698,15 @@ object runMSRC {
       uniqA-uniqB
     }
     
+    val uniqunessIfSwappedDataDep = (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
+    //  val sdA= Math.sqrt(a.neighVariance)
+
+    //  val sdB= Math.sqrt(b.neighVariance)
+      val uniqAinB = Math.pow((a.avgValue-b.neighMean),2)
+      val uniqBinA = Math.pow((b.avgValue-a.neighMean),2)
+      uniqAinB+uniqBinA
+    }
+    
     
     val graidientFunc= if(sO.dataDepUseIntensity) { 
       val bounds = quantileDataDepFn(intensDifDataDep, numDataDepGraidBins, trainData);
@@ -715,8 +729,14 @@ object runMSRC {
        findBound(bounds,intensityByNeighSDDataDep(a,b))
      }  
     }
-    else{ // if ( dataDepUseUniqueness )
+    else if(sO.dataDepUseUniqueness){ // if ( dataDepUseUniqueness )
 val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
+      (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
+      findBound(bounds,uniqunessDataDep(a,b))
+     }  
+    }
+    else{ // if ( dataDepUseUniquenessInOtherNeighbourhood )
+val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,trainData);
       (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
       findBound(bounds,uniqunessDataDep(a,b))
      }  
@@ -766,9 +786,14 @@ val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
         trainDataRDD,
         myGraphSegObj,
         sO)
+    val trainderSGD: SSGSolver[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =  new SSGSolver[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
+        trainData,
+        myGraphSegObj,
+        sO)
+    
 
     val t0MTrain = System.currentTimeMillis()
-    val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = trainer.trainModel()
+    val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = if(sO.optimizeWithSubGraid) trainderSGD.optimize() else  trainer.trainModel() 
     val t1MTrain = System.currentTimeMillis()
     var avgTrainLoss = 0.0
     var avgPerPixTrainLoss = 0.0
@@ -904,7 +929,7 @@ val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
     
    
     
-    val evenMore = (" %.5f, %.5f, %.5f").format(vocScores(0),vocScores(1),(if(vocScores.length>2) vocScores(2) else (-0.0)))
+    val evenMore = (" %.5f, %.5f, %.5f").format(vocScores(0),vocScores(1),(if(vocScores.length>2) vocScores(2) else (-0.0)))+","+sO.lambda
     
     
     
