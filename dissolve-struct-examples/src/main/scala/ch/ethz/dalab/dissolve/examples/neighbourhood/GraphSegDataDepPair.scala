@@ -52,10 +52,10 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
   
   val myLoopyBP = new MaximizeByBPLoopy_rw(loopyBPmaxIter)
   
- 
-  val labelIDs = classFreqs.keySet.toList.sorted
-  assert(labelIDs==(0 until labelIDs.length).toList)
-  val lableFreqLoss = DenseVector(labelIDs.map { labl => classFreqs.get(labl).get }.toArray)
+   
+  val labelIDs = if(classFreqs!=null)  classFreqs.keySet.toList.sorted else List(0,1)
+  if(classFreqs!=null)  assert(labelIDs==(0 until labelIDs.length).toList)
+  val lableFreqLoss = if(classFreqs!=null)  DenseVector(labelIDs.map { labl => classFreqs.get(labl).get }.toArray) else DenseVector(Array.fill(1){0.0})
   
   
   
