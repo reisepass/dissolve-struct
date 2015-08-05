@@ -441,7 +441,17 @@ object startupUtils {
           ((0 until numSuperPixels) zip variances).toMap 
    }
     
-    
+    def countSuperPixelSizes(mask:Array[Array[Array[Int]]],numSuperPixels:Int):Array[Int]={
+      
+      val xDim = mask.length
+      val yDim = mask(0).length
+      val zDim = mask(0)(0).length
+      val counts = Array.fill(numSuperPixels){0}
+      for(x <- 0 until xDim; y <- 0 until yDim ; z <- 0 until zDim){
+        counts(mask(x)(y)(z))+=1
+      }
+      counts
+    }
     
     def colorIntensityVariance(image:ImageStack,mask:Array[Array[Array[Int]]], numSuperPixels:Int, maxColorValue:Int=255):Map[Int,Double]={
      val colMod = image.getColorModel()
@@ -1015,16 +1025,20 @@ object startupUtils {
       val rawImgDir =  imageDataSource  
       val groundTruthDir = groundTruthDataSource  
        val lotsofBMP = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".bmp")))
+       val lotsofPNG = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".png")))
        val lotsofTIF = Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tif")))
        val lotsofTIFF = lotsofTIF ++ Option(new File(rawImgDir).list).map(_.filter(_.endsWith(".tiff")))
-       val allFiles =( lotsofTIFF ++ lotsofBMP).flatten.toArray
+       val allFiles =( lotsofTIFF ++ lotsofBMP++lotsofPNG).flatten.toArray
        val extension=if(lotsofBMP.get.size>0 ){
          assert(lotsofTIFF.flatten.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
          ".bmp"
        }
-       else if(lotsofTIFF.size>0){
+       else if(lotsofTIFF.filterNot(_.forall(_.isEmpty)).size>0){
          assert(lotsofBMP.get.size==0,"Currently we only support uniform datatypes among the training and testing images. Dir searched:"+rawImgDir )
          ".tif"
+       }
+       else if(lotsofPNG.get.size>0){
+         ".png"
        }
        else
          ".tif"
@@ -1263,9 +1277,11 @@ object startupUtils {
       */
      //Construct Ground Truth 
      val tGround = System.currentTimeMillis()
-        val groundTruthpath =  groundTruthDir+"/"+ nameNoExt+"_GT"+extension
+        val msrcPath=groundTruthDir+"/"+ nameNoExt+"_GT"+extension
+        val groundTruthpath =  if((new File(msrcPath)).exists()) msrcPath else groundTruthDir+"/"+ nameNoExt+extension
         val openerGT = new Opener();
         val imgGT = openerGT.openImage(groundTruthpath);
+        
         println("Now Opening: "+groundTruthpath)
         val gtStack = imgGT.getStack
         assert(xDim==gtStack.getWidth)

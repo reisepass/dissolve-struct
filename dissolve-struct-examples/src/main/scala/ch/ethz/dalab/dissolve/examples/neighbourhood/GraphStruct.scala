@@ -78,7 +78,8 @@ case class Node[Features](
   var neighMean: Double=Double.MinValue,
   var neighVariance: Double=Double.MinValue,
   var hop2NeighMean:Double=Double.MinValue,
-  var hop2NeighVar: Double=Double.MinValue) extends Serializable {
+  var hop2NeighVar: Double=Double.MinValue,
+  var size:Int=Integer.MIN_VALUE) extends Serializable {
   override def hashCode(): Int = {
     idx
   }

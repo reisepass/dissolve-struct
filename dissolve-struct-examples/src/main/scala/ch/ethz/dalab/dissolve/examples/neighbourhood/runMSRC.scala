@@ -258,6 +258,16 @@ object runMSRC {
         Array.fill(numSupPix){Array[Double]()}
       }
     
+    val superSizes= if(sO.featAddSupSize){
+       val tmpSizes= countSuperPixelSizes(mask,numSupPix)
+       for ( i <- 0 until numSupPix)
+         nodes(i).size=tmpSizes(i)
+         val ttt = tmpSizes.map(x => x.toDouble)
+      standardize(DenseVector(ttt ))
+    }
+    else { 
+      DenseVector(Array.fill(numSupPix){(-1.0)})
+    }
     
     if(sO.featUniqueIntensity){
       
@@ -320,8 +330,8 @@ object runMSRC {
             (if(sO.featUnique2Hop) Array(nor_iNDif(old.idx),nor_iNRatio(old.idx),nor_neighh2Var(old.idx),
                 (nor_iNN2Dif(old.idx)),nor_iNN2Ratio(old.idx),
                 (nor_neighh2Var(old.idx)-nor_neighVar(old.idx)),nor_iNN2VarRatio(old.idx)) else Array[Double]() ) 
-            ++old.features.toArray++neighHists(old.idx)++greyStdHist(old.idx))
-        new Node[Vector[Double]](i, f,old.connections,nor_intens(i),nor_neighAvg(i),nor_neighVar(i),nor_neigh2hAvg(i),nor_neighh2Var(i))
+            ++old.features.toArray++neighHists(old.idx)++greyStdHist(old.idx)++(if(sO.featAddSupSize)Array(superSizes(i).toDouble) else Array[Double]())  )
+        new Node[Vector[Double]](i, f,old.connections,nor_intens(i),nor_neighAvg(i),nor_neighVar(i),nor_neigh2hAvg(i),nor_neighh2Var(i),old.size)
       }}
       
       out.toArray
@@ -393,6 +403,7 @@ object runMSRC {
     sO.sample = options.getOrElse("sample", "frac")
     sO.sampleFrac = options.getOrElse("samplefrac", "1").toDouble
     sO.dbcfwSeed = options.getOrElse("dbcfwSeed","-1").toInt
+    sO.randSeed = options.getOrElse("oldRandSeed","42").toInt
     sO.sampleWithReplacement = options.getOrElse("samplewithreplacement", "false").toBoolean
     sO.enableManualPartitionSize = options.getOrElse("manualrddpart", "false").toBoolean
     sO.NUM_PART = options.getOrElse("numpart", "2").toInt
@@ -499,8 +510,9 @@ object runMSRC {
     val SPLIT_IMAGES = options.getOrElse("SPLIT_IMAGES","false").toBoolean
     sO.splitImagesBy = options.getOrElse("splitImagesBy","-1").toInt
     sO.optimizeWithSubGraid = options.getOrElse("optimizeWithSubGraid","false").toBoolean
-    
-    
+    sO.featAddSupSize = options.getOrElse("featAddSupSize","false").toBoolean
+    if(sO.featAddSupSize)
+      assert(sO.featUniqueIntensity,"If you set featAddSupSize to true you have to also set featUniqueIntensity to true")
     /**
      * Some local overrides
      */
@@ -929,7 +941,7 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
     
    
     
-    val evenMore = (" %.5f, %.5f, %.5f").format(vocScores(0),vocScores(1),(if(vocScores.length>2) vocScores(2) else (-0.0)))+","+sO.lambda
+    val evenMore = (" %.5f, %.5f, %.5f").format(vocScores(0),vocScores(1),(if(vocScores.length>2) vocScores(2) else (-0.0)))+","+sO.lambda+","+labelOccurance(0)+","+labelOccurance(1)+","+(if(labelOccurance.length>2) labelOccurance(2) else (-0.0))
     
     
     
@@ -938,7 +950,7 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
         sO.dataGenCanvasSize,sO.learningRate,if(sO.useMF)"t"else"f",sO.numClasses,MAX_DECODE_ITERATIONS,if(sO.onlyUnary)"t"else"f",
         if(sO.debug)"t"else"f",sO.roundLimit,if(sO.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,sO.dataRandSeed , 
         if(sO.useMSRC) "t" else "f", if(sO.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(sO.trainTestEqual)"t" else "f" , 
-        sO.dataSetName )+newLabels+evenMore )
+        sO.dataSetName )+newLabels+evenMore+","+bToS(sO.featAddSupSize )+","+sO.slicMinBlobSize  ) 
         
   
     sc.stop()

@@ -131,6 +131,7 @@ class SolverOptions[X, Y] extends Serializable {
   var alsoWeighLossAugByFreq:Boolean=false;
   var splitImagesBy:Int=(-1);
   var optimizeWithSubGraid:Boolean = false;
+  var featAddSupSize:Boolean = false;
   
   
   
