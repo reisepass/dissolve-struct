@@ -31,48 +31,74 @@ import ch.ethz.dalab.dissolve.examples.neighbourhood.startupUtils._
  
 object ChainTestAdapter_G {
 
+  final def sample[A](dist: Map[A, Double]): A = {
+  val p = scala.util.Random.nextDouble
+  val it = dist.iterator
+  var accum = 0.0
+  while (it.hasNext) {
+    val (item, itemProb) = it.next
+    accum += itemProb
+    if (accum >= p)
+      return item  // return so that we don't have to search through the whole distribution
+  }
+  sys.error(f"this should never happen")  // needed so it will compile
+}
+  
   ////
+  val dataPath =  "/home/mort/workspace/dissolve-struct/data/generated/Mito_2d"
+  val numClasses=2
+  
 
   type X = GraphStruct[Vector[Double], (Int, Int, Int)]
   type Y = GraphLabels
+ val sO: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new SolverOptions()
+  sO.recompFeat=false
+  sO.onlyUnary=false
+  sO.useNaiveUnaryMax=true
+  sO.useLoopyBP=true
+  sO.useMF=false
+  sO.loopyBPmaxIter=2
+  sO.alsoWeighLossAugByFreq=true
+  sO.useClassFreqWeighting=true
+  sO.isColor=false
+  sO.generateMSRCSupPix=false
+  sO.squareSLICoption=true 
+  sO.superPixelSize=15  //S
+  sO.slicCompactness=(-1)
+  sO.featHistSize=15
+  sO.featIncludeMeanIntensity = true
+  sO.featAddOffsetColumn=false
+  sO.featAddIntensityVariance=false
+  sO.featNeighHist=true
+  sO.featUnique2Hop=false
+  sO.featUniqueIntensity = false
+  sO.slicNormalizePerClust=false  
+  sO.standardizeFeaturesByColumn=true
+  sO.numClasses=numClasses
+  sO.runName="UnNamed"
 
-  val myGraphSegObj = new GraphSegmentationClass(true, MAX_DECODE_ITERATIONS=1000, MAX_DECODE_ITERATIONS_MF_ALT = 10, USE_NAIV_UNARY_MAX=false,USE_MF=false, DISABLE_UNARY = false)
-
-  val dissolveFunctions: DissolveFunctions[X, Y] = myGraphSegObj
-
-  val histBinsPerCol = 3
-  val histBinsPerGray = 8
-  import ch.ethz.dalab.dissolve.examples.neighbourhood.runMSRC._
-  val featFn2 = (image: ImageStack, mask: Array[Array[Array[Int]]]) => {
-
-    val xDim = mask.length
-    val yDim = mask(0).length
-    val zDim = mask(0)(0).length
-    val numSupPix = mask(xDim - 1)(yDim - 1)(zDim - 1) + 5 //TODO is this correct always ?
+  sO.imageDataFilesDir=dataPath+"/Images"
+    sO.groundTruthDataFilesDir=dataPath+"/GroundTruth"
    
-    val isColor =  true //TODO maybe this is not the best way to check for color in the image
-    //TODO the bit depth should give me the max value which the hist should span over 
-
-    if (isColor) {
-      val hist = colorhist(image, mask, histBinsPerCol, 255 / histBinsPerCol)
-     // val coMat = coOccurancePerSuperRGB(mask, image, numSupPix, histBinsPerCol)
-      hist///++ coMat
-    } else {
-      val hist = greyHist(image, mask, histBinsPerGray, 255 / (histBinsPerGray))
-      val coMat= greyCoOccurancePerSuper(image, mask, histBinsPerCol)
-      hist ++coMat
-    }
-  }
+   import ch.ethz.dalab.dissolve.examples.neighbourhood.runMSRC._
   
-  val dataPath =  "/home/mort/workspace/dissolve-struct/data/generated/colorEasy"
-  val numClasses=2
+  
+  
   println (" Using this data: "+ dataPath)
   //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
-  val (trainData, testData, colorlabelMap, classFreqFound, transProb) = genMSRCsupPixV2(2, 10,10,dataPath+"/Images", dataPath+"/GroundTruth", featFn2, 100, "none8", false, false, false)
-
+  
+  val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genMSRCsupPixV3(sO,featFn3,afterFeatFn1)
 
   val data = trainData.toArray
-  
+    
+  val myGraphSegObj = new GraphSegmentationClass(sO.onlyUnary,1000,
+            sO.learningRate ,sO.useMF,sO.mfTemp,sO.useNaiveUnaryMax,
+            false,10,sO.runName,
+             classFreqFound,
+            sO.weighDownUnary,sO.weighDownPairwise, sO.LOSS_AUGMENTATION_OVERRIDE,
+            false,sO.PAIRWISE_UPPER_TRI,sO.useMPLP,sO.useLoopyBP,sO.loopyBPmaxIter,sO.alsoWeighLossAugByFreq,sO) 
+  val dissolveFunctions: DissolveFunctions[X, Y] = myGraphSegObj
+
  
    val lo = data(0)
   val numd = myGraphSegObj.featureFn(lo.pattern, lo.label).size
@@ -90,16 +116,17 @@ object ChainTestAdapter_G {
    *
    * This function perturbs `degree` of the values by swapping
    */
-  def perturb(y: Y, degree: Double = 0.1): Y = {
+  def perturb(y: Y, degree: Double = 0.3): Y = {
     val d = y.d.size
     val numSwaps = max(1, (degree * d).toInt)
 
+    val possibleIDX =scala.util.Random.shuffle((0 until d).toList)
     for (swapNo <- 0 until numSwaps) {
       // Swap two random values in y
-      val (i, j) = (scala.util.Random.nextInt(d), scala.util.Random.nextInt(d))
-      val temp = y.d(i)
-      y.d(i) = y.d(j)
-      y.d(j) = temp
+      val nextNewLabel =sample[Int](classFreqFound)
+      val i = possibleIDX(swapNo)
+      
+      y.d(i) = nextNewLabel
     }
 
     y
@@ -144,6 +171,7 @@ object ChainTestAdapter {
    *
    * This function perturbs `degree` of the values by swapping
    */
+  
   def perturb(y: Y, degree: Double = 0.1): Y = {
     val d = y.size
     val numSwaps = max(1, (degree * d).toInt)

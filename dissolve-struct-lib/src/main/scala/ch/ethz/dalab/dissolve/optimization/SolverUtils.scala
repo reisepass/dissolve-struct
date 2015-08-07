@@ -41,6 +41,21 @@ object SolverUtils {
 
     loss / dataSize
   }
+  
+  def averageLoss[X, Y](data: Seq[LabeledObject[X, Y]],
+                        dissolveFunctions: DissolveFunctions[X, Y],
+                        model: StructSVMModel[X, Y],
+                        dataSize: Int): Double = {
+
+    val loss =
+      data.map {
+        case datapoint =>
+          val ystar_i = dissolveFunctions.predictFn(model, datapoint.pattern)
+          dissolveFunctions.lossFn(datapoint.label, ystar_i)
+      }.fold(0.0)((acc, ele) => acc + ele)
+
+    loss / dataSize
+  }
 
   /**
    * Objective function (SVM dual, assuming we know the vector b of all losses. See BCFW paper)
@@ -138,6 +153,50 @@ object SolverUtils {
     (gap, w_s, ell_s)
   }
 
+  
+  def dualityGap[X, Y](data: Seq[LabeledObject[X, Y]],
+                       dissolveFunctions: DissolveFunctions[X, Y],
+                       model: StructSVMModel[X, Y],
+                       lambda: Double,
+                       dataSize: Int)(implicit m: ClassTag[Y]): (Double, Vector[Double], Double) = {
+
+    val phi = dissolveFunctions.featureFn _
+    val maxOracle = dissolveFunctions.oracleFn _
+    val lossFn = dissolveFunctions.lossFn _
+
+    val w: Vector[Double] = model.getWeights()
+    val ell: Double = model.getEll()
+
+    val n: Int = dataSize.toInt
+    val d: Int = model.getWeights().size
+
+    val (w_s_orig, ell_s_orig) = data.map {
+      case datapoint =>
+        val yStar = maxOracle(model, datapoint.pattern, datapoint.label)
+        val w_s = phi(datapoint.pattern, datapoint.label) - phi(datapoint.pattern, yStar)
+       
+       
+        val ell_s = lossFn(datapoint.label, yStar)
+      
+        (w_s, ell_s)
+    }.fold((Vector.zeros[Double](d), 0.0)) {
+      case ((w_acc, ell_acc), (w_i, ell_i)) =>
+        (w_acc + w_i, ell_acc + ell_i)
+    }
+   // val oldell_s=ell_s
+    val w_s = w_s_orig / (lambda * n)
+    val ell_s = ell_s_orig / n
+
+    val gap: Double = w.t * (w - w_s) * lambda - ell + ell_s
+    if(gap<0){
+      val size = data.map{case datapoint => 1}.fold(0){case(last, a)=>(last+a)}
+      
+      println("gap can never be negative")
+    }
+    (gap, w_s, ell_s)
+  }
+  
+  
   /**
    * Primal objective.
    * Requires one full pass of decoding over all data examples.

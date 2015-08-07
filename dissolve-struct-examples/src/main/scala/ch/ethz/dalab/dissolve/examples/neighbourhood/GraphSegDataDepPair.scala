@@ -42,10 +42,11 @@ import scala.collection.mutable.HashSet
 import cc.factorie.infer.MaximizeByBPLoopy
 import cc.factorie.la.DenseTensor1
 import cc.factorie.la.Tensor
+import ch.ethz.dalab.dissolve.optimization.SolverOptions
 
 
 //This class assumes that at index 0 of the xFeature vector is the average intensity of the superpixel 
-class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true,  loopyBPmaxIter:Int=10, alsoWeighLossAugByFreq:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double]])=>Int),dataDepNumBins:Int,EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true,  loopyBPmaxIter:Int=10, alsoWeighLossAugByFreq:Boolean=false,sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -196,7 +197,12 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
 
         graph.getC(idx).foreach { neighbour =>
           {
-            if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
+            
+             val prune= if(sO.pairwiseModelPruneSomeEdges!=0.0)
+              Math.random() > sO.pairwiseModelPruneSomeEdges
+              else 
+                false
+            if (!prune && !nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
               nodePairsUsed.add((idx, neighbour))
               model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
                 val gBin = conGraid(idx).get(neighbour).get
@@ -259,7 +265,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
 
     val weightVec = model.getWeights()
 
-    // Unary is of size f x K, each column representing feature vector of class K
+    // Unary is of size f x K, each column rexFeatureStackpresenting feature vector of class K
     // Pairwise if of size K * K
     val (unaryWeights, pairwiseWeights) = unpackWeightVec(weightVec, numDims, numClasses = numClasses)
     assert(unaryWeights.rows == numDims)
@@ -352,7 +358,10 @@ lastHash=thisyiHash
     (unaryPot, pairwiseMats)
   }
 
+  
   def predictFn(model: StructSVMModel[xData, yLabels], xi: xData): yLabels = {
     return oracleFn(model, xi, yi = null)
   }
+  
+ 
 }

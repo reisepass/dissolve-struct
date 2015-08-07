@@ -87,7 +87,7 @@ case class Node[Features](
 }
 
 case class GraphLabels(d: Vector[Int], numClasses: Int, originalLabelFile: String = "None") extends Serializable {
-  assert(numClasses > 0)
+  assert(numClasses > 0, "NumClasses can not be <0")
   def isInverseOf(other: GraphLabels): Boolean = {
     if (other.d.size != d.size)
       return false

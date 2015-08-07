@@ -1,5 +1,6 @@
 package ch.ethz.dalab.dissolve.examples.neighbourhood
 
+
 import ch.ethz.dalab.scalaslic.SLIC
 import ch.ethz.dalab.scalaslic.DatumCord
 import ch.ethz.dalab.dissolve.examples.imageseg._
@@ -44,11 +45,20 @@ import java.awt.Color
 import scala.collection.mutable.ListBuffer
 import ch.ethz.dalab.dissolve.examples.neighbourhood.startupUtils._
 import ch.ethz.dalab.dissolve.optimization.SSGSolver
+
+
+import ch.ethz.dalab.dissolve.classification.StructSVMModel
+
+
+import ch.ethz.dalab.dissolve.classification.StructSVMModel
+
  
 
-object runMSRC {
-
-   
+/**
+ * @author mort
+ */
+object predictWithW {
+  
   
   
   def main(args: Array[String]): Unit = {
@@ -344,32 +354,45 @@ object runMSRC {
       nodes.toArray
   } 
   
+      
+  type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
+  type yLabels = GraphLabels
+  
+  
+  def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
+    assert(xDat.graphNodes.size == yDat.d.size)
+    
+
+    val xFeatures = xDat.getF(0).size
+    val numClasses = yDat.numClasses
+
+    val unaryFeatureSize = xFeatures * numClasses
+    
+    val phi =  DenseVector.zeros[Double](unaryFeatureSize)
+
+    
+    val unary = DenseVector.zeros[Double](unaryFeatureSize)
+    for (idx <- 0 until yDat.d.size) {
+      val label = yDat.d(idx)
+      val startIdx = label * xFeatures
+      val endIdx = startIdx + xFeatures
+      val curF =xDat.getF(idx) 
+      unary(startIdx until endIdx) :=curF + unary(startIdx until endIdx)
+    }
+
+    
+      phi(0 until (unaryFeatureSize)) := unary
+    
+
+    
+
+   phi
+  }
   
   
   
   def runStuff(options: Map[String, String]) {
-    //
-    //TODO Remove debug
-    //( canvasSize : Int,probUnifRandom: Double, featureNoise : Double, pairRandomItr: Int, numClasses:Int, neighbouringProb : Array[Array[Double]], classFeat:Array[Vector[Double]]){
-
-    //
-    
-    /*
-    val path1 = "/home/mort/workspace/dissolve-struct/data/generated/neuro2/Images/"
-    val path2 = "/home/mort/workspace/dissolve-struct/data/generated/neuro2/GroundTruth/"
-    val mask40 = GraphUtils.readObjectFromFile[Array[Array[Array[Int]]]](path1+"training2_SLIC_20_none.mask")
-     val opener = new Opener();
-        val img = opener.openImage(path1+"training2.tif");
-
-        printSuperPixels(mask40,img,150,"_s_20_neuroTrain_")
-        
-                val img2 = opener.openImage(path2+"training2_GT.tif");
-    
-            printSuperPixels(mask40,img2,150,"_s_20_neuroTrue_")
-    
-    */
-    //
-    
+   
     
     printMemory()
 
@@ -468,13 +491,13 @@ object runMSRC {
     sO.debugPrintSuperPixImg = options.getOrElse("debugPrintSuperPixImg","false").toBoolean
     sO.useLoopyBP = options.getOrElse("useLoopyBP","false").toBoolean
     sO.useMPLP= options.getOrElse("useMPLP","false").toBoolean
-    sO.useRandomDecoding=options.getOrElse("useRandomDecoding","false").toBoolean
     val GEN_TRY_TO_MATCH_GENERATED_DATA=options.getOrElse("GEN_TRY_TO_MATCH_GENERATED_DATA","false").toBoolean
-    assert(sO.useMF||sO.useNaiveUnaryMax||sO.useMPLP||sO.useLoopyBP||sO.useRandomDecoding)
+    assert(sO.useMF||sO.useNaiveUnaryMax||sO.useMPLP||sO.useLoopyBP)
     implicit def bool2int(b:Boolean) = if (b) 1 else 0
 
-    assert((sO.useMF:Int)+(sO.useNaiveUnaryMax:Int)+(sO.useMPLP:Int)+(sO.useLoopyBP:Int )+(sO.useRandomDecoding:Int )==1)
-    sO.inferenceMethod= if(sO.useMF) "MF" else if(sO.useNaiveUnaryMax) "NAIVE_MAX" else if(sO.useMPLP) "Factorie" else if(sO.useLoopyBP) "LoopyBP" else if(sO.useRandomDecoding) "RandomY*" else "NotFound"
+    assert((sO.useMF:Int)+(sO.useNaiveUnaryMax:Int)+(sO.useMPLP:Int)+(sO.useLoopyBP:Int )==1)
+    
+    sO.inferenceMethod= if(sO.useMF) "MF" else if(sO.useNaiveUnaryMax) "NAIVE_MAX" else if(sO.useMPLP) "Factorie" else if(sO.useLoopyBP) "LoopyBP" else "NotFound"
     sO.featIncludeMeanIntensity = options.getOrElse("featMeanIntensity","false").toBoolean
     sO.modelPairwiseDataDependent = options.getOrElse("modelPairwiseDataDependent", "false").toBoolean
     if(sO.modelPairwiseDataDependent){
@@ -521,12 +544,19 @@ object runMSRC {
     if(sO.featAddSupSize)
       assert(sO.featUniqueIntensity,"If you set featAddSupSize to true you have to also set featUniqueIntensity to true")
     sO.pairwiseModelPruneSomeEdges= options.getOrElse("pairwiseModelPruneSomeEdges","0.0").toDouble
+      
+    //
+    //
+    //Actual W params 
+    //
+    //  
     
+    val useRandomW=options.getOrElse("useRandomW","true").toBoolean
+    val useZeroW = options.getOrElse("useZeroW","false").toBoolean
       
       
-      
-      
-      
+    val prefix = if(useRandomW) "RandomW_" else "ZeroW"
+    sO.inferenceMethod=prefix+sO.inferenceMethod
     /**
      * Some local overrides
      */
@@ -686,144 +716,30 @@ object runMSRC {
     * 
     */
     
-    if(sO.useMSRC) sO.numClasses = 24
-
-
-    println(sO.toString())
-
-    val conf =
-      if (runLocally)
-        new SparkConf().setAppName(appName).setMaster("local")
-      else
-        new SparkConf().setAppName(appName)
-
-    val sc = new SparkContext(conf)
-    sc.setCheckpointDir(debugDir + "/checkpoint-files")
-
-    println(SolverUtils.getSparkConfString(sc.getConf))
-
+   
     
-    
-    
-    val numDataDepGraidBins = sO.numDataDepGraidBins
-    def findBound(b : Array[Double], v: Double):Int={
-        for(i <-0 until b.length){
-          if( v <= b(i))
-            return i
-        }
-        assert(false, "Something is wrong with the Pairwise dataDependency function because the value did not fint inside the bounds")
-        return  (-1) 
-      }
-    
-    val intensDifDataDep = (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ Math.pow(a.avgValue-b.avgValue,2)}
-    val IntensBy2NeighSDDataDep= (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{       (Math.abs(a.avgValue-b.avgValue)/Math.sqrt(a.hop2NeighVar))    }
-    val intensityByNeighSDDataDep = (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ (Math.abs(a.avgValue-b.avgValue)/Math.sqrt(a.neighVariance))     }
-    val uniqunessDataDep = (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-      val sdA= Math.sqrt(a.neighVariance)
-      val uniqA = Math.abs(a.avgValue-a.neighMean)/sdA
-      val sdB= Math.sqrt(b.neighVariance)
-      val uniqB = Math.abs(b.avgValue-b.neighMean)/sdB
-      uniqA-uniqB
-    }
-    
-    val uniqunessIfSwappedDataDep = (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-    //  val sdA= Math.sqrt(a.neighVariance)
-
-    //  val sdB= Math.sqrt(b.neighVariance)
-      val uniqAinB = Math.pow((a.avgValue-b.neighMean),2)
-      val uniqBinA = Math.pow((b.avgValue-a.neighMean),2)
-      uniqAinB+uniqBinA
-    }
-    
-    
-    val graidientFunc= if(sO.dataDepUseIntensity) { 
-      val bounds = quantileDataDepFn(intensDifDataDep, numDataDepGraidBins, trainData);
-      (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-        val dep = intensDifDataDep(a,b)
-        findBound(bounds,dep)
-      }
-      }
-    else if (sO.dataDepUseIntensityBy2NeighSD) { 
-     val bounds = quantileDataDepFn(IntensBy2NeighSDDataDep, numDataDepGraidBins, trainData);
-    (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-      val dep = IntensBy2NeighSDDataDep(a,b)
-        findBound(bounds,dep)
-      }
-    
-    } 
-    else if(sO.dataDepUseIntensityByNeighSD){
-      val bounds = quantileDataDepFn(intensityByNeighSDDataDep,numDataDepGraidBins,trainData);
-      (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-       findBound(bounds,intensityByNeighSDDataDep(a,b))
-     }  
-    }
-    else if(sO.dataDepUseUniqueness){ // if ( dataDepUseUniqueness )
-val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
-      (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-      findBound(bounds,uniqunessDataDep(a,b))
-     }  
-    }
-    else{ // if ( dataDepUseUniquenessInOtherNeighbourhood )
-val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,trainData);
-      (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-      findBound(bounds,uniqunessDataDep(a,b))
-     }  
-    }
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    printMemory()
-    
-    
-    
-    sO.testDataRDD =
-      if (sO.enableManualPartitionSize)
-        Some(sc.parallelize(trainData, sO.NUM_PART))
-      else
-        Some(sc.parallelize(trainData))
-
-    val trainDataRDD =
-      if (sO.enableManualPartitionSize)
-        sc.parallelize(trainData, sO.NUM_PART)
-      else
-        sc.parallelize(trainData)
-
-        val myGraphSegObj = if(!sO.modelPairwiseDataDependent) {new GraphSegmentationClass(sO.onlyUnary,MAX_DECODE_ITERATIONS,
+    val myGraphSegObj= new GraphSegmentationClass(sO.onlyUnary,MAX_DECODE_ITERATIONS,
             sO.learningRate ,sO.useMF,sO.mfTemp,sO.useNaiveUnaryMax,
             DEBUG_COMPARE_MF_FACTORIE,MAX_DECODE_ITERATIONS_MF_ALT,sO.runName,
             if(sO.useClassFreqWeighting) classFreqFound else null,
             sO.weighDownUnary,sO.weighDownPairwise, sO.LOSS_AUGMENTATION_OVERRIDE,
-            false,sO.PAIRWISE_UPPER_TRI,sO.useMPLP,sO.useLoopyBP,sO.loopyBPmaxIter,sO.alsoWeighLossAugByFreq,sO) }
-        else {
-          new GraphSegDataDepPair(graidientFunc,numDataDepGraidBins,sO.runName,if(sO.useClassFreqWeighting)classFreqFound else null, 
-              loopyBPmaxIter=sO.loopyBPmaxIter,alsoWeighLossAugByFreq=sO.alsoWeighLossAugByFreq,sO=sO)
-        }
-    val trainer: StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =
-      new StructSVMWithDBCFW[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
-        trainDataRDD,
-        myGraphSegObj,
-        sO)
-    val trainderSGD: SSGSolver[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] =  new SSGSolver[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels](
-        trainData,
-        myGraphSegObj,
-        sO)
+            false,sO.PAIRWISE_UPPER_TRI,sO.useMPLP,sO.useLoopyBP,sO.loopyBPmaxIter,sO.alsoWeighLossAugByFreq,sO) 
+
     
 
-    val t0MTrain = System.currentTimeMillis()
-    val model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = if(sO.optimizeWithSubGraid) trainderSGD.optimize() else  trainer.trainModel() 
-    val t1MTrain = System.currentTimeMillis()
+    println(sO.toString())
+    val samplePoint = trainData(0)
+    
+    val rand2 = if(sO.randSeed!=(-1)) new Random(sO.randSeed) else new Random()
+    
+    val d: Int = myGraphSegObj.featureFn(samplePoint.pattern, samplePoint.label).size
+    
+    val weights = if(useRandomW) Vector((0 until d).map( a=>rand2.nextDouble).toArray) else Vector(Array.fill(d){0.0})
+    
+     var model: StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] = new StructSVMModel[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] (  weights, 0.0,
+      DenseVector.zeros[Double](d), myGraphSegObj, sO.numClasses)
+      
+
     var avgTrainLoss = 0.0
     var avgPerPixTrainLoss = 0.0
     var count=0
@@ -963,15 +879,16 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
     
     
     println("#EndScore#,%d,%s,%s,%d,%.3f,%.3f,%s,%d,%d,%.3f,%s,%d,%d,%s,%s,%d,%s,%f,%f,%d,%s,%s,%.3f,%.3f,%s,%s".format(
-        sO.startTime, sO.runName,sO.gitVersion,(t1MTrain-t0MTrain),sO.dataGenSparsity,sO.dataAddedNoise,if(sO.dataNoiseOnlyTest)"t"else"f",sO.dataGenTrainSize,
+        sO.startTime, sO.runName,sO.gitVersion,(0.0),sO.dataGenSparsity,sO.dataAddedNoise,if(sO.dataNoiseOnlyTest)"t"else"f",sO.dataGenTrainSize,
         sO.dataGenCanvasSize,sO.learningRate,if(sO.useMF)"t"else"f",sO.numClasses,MAX_DECODE_ITERATIONS,if(sO.onlyUnary)"t"else"f",
         if(sO.debug)"t"else"f",sO.roundLimit,if(sO.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,sO.dataRandSeed , 
         if(sO.useMSRC) "t" else "f", if(sO.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(sO.trainTestEqual)"t" else "f" , 
         sO.dataSetName )+newLabels+evenMore+","+bToS(sO.featAddSupSize )+","+sO.slicMinBlobSize  ) 
         
   
-    sc.stop()
+    
 
   }
 
+  
 }

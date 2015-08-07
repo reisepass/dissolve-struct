@@ -132,6 +132,8 @@ class SolverOptions[X, Y] extends Serializable {
   var splitImagesBy:Int=(-1);
   var optimizeWithSubGraid:Boolean = false;
   var featAddSupSize:Boolean = false;
+  var pairwiseModelPruneSomeEdges:Double = 0.0;
+  var useRandomDecoding:Boolean = false; 
   
   
   
@@ -150,6 +152,7 @@ class SolverOptions[X, Y] extends Serializable {
   // For debugging/Testing purposes
   // Basic debugging flag
   var debug: Boolean = false
+  var debugWeightUpdate:Boolean = false
   // Obtain statistics (primal value, duality gap, train error, test error, etc.) once in these many rounds.
   // If 1, obtains statistics in each round
   var debugMultiplier: Int = 1

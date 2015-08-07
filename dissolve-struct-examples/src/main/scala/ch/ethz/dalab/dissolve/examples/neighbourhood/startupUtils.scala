@@ -1079,31 +1079,31 @@ object startupUtils {
           var gMax = Double.MinValue
           val tStartPre = System.currentTimeMillis()
           val aggrStat= for( fI <- 0 until allFiles.size) yield {
-          val fName = allFiles(fI)
-          val nameNoExt = fName.substring(0,fName.length()-4)
-          val rawImagePath =  rawImgDir+"/"+ fName
-          val opener = new Opener();
-          val img = opener.openImage(rawImagePath);
-          val aStack = img.getStack
-          val bitDep = aStack.getBitDepth()
-          val isColor = if(bitDep==8) false else true  
-          assert(sO.isColor==isColor,"Looks like your image is not the color model you specified")
-          assert(sO.isColor==false,"image standardizeation is not yet implemented for color")
-          val xDim = aStack.getWidth
-          val yDim = aStack.getHeight
-          val zDim = aStack.getSize
-          val copyImage =  DenseVector(imgStackToArray(aStack))
-          val minOut = min(copyImage)
-          if(minOut<gMin)
-            gMin=minOut
-          val maxOut = max(copyImage)
-          if(maxOut>gMax)
-            gMax = minOut
-          val sumOut = sum(copyImage)
-          val countOut = copyImage.size
-          val meanOut = sumOut/countOut
-          val varOut = variance(copyImage)
-          (countOut,meanOut,varOut)
+            val fName = allFiles(fI)
+            val nameNoExt = fName.substring(0,fName.length()-4)
+            val rawImagePath =  rawImgDir+"/"+ fName
+            val opener = new Opener();
+            val img = opener.openImage(rawImagePath);
+            val aStack = img.getStack
+            val bitDep = aStack.getBitDepth()
+            val isColor = if(bitDep==8) false else true  
+            assert(sO.isColor==isColor,"Looks like your image is not the color model you specified")
+            assert(sO.isColor==false,"image standardizeation is not yet implemented for color")
+            val xDim = aStack.getWidth
+            val yDim = aStack.getHeight
+            val zDim = aStack.getSize
+            val copyImage =  DenseVector(imgStackToArray(aStack))
+            val minOut = min(copyImage)
+            if(minOut<gMin)
+              gMin=minOut
+            val maxOut = max(copyImage)
+            if(maxOut>gMax)
+              gMax = minOut
+            val sumOut = sum(copyImage)
+            val countOut = copyImage.size
+            val meanOut = sumOut/countOut
+            val varOut = variance(copyImage)
+            (countOut,meanOut,varOut)
         }
         var movingVar = 0.0
         var movingMean = 0.0

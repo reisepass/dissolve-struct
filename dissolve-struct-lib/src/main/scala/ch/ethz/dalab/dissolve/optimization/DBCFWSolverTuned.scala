@@ -336,9 +336,8 @@ class DBCFWSolverTuned[X, Y](
             sO.dataGenHowMany,sO.slicCompactness,bToS(sO.putLabelIntoFeat),sO.dataAddedNoise
             )+","+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+
             ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist)+","+ sO.numDataDepGraidBins+","+sO.loopyBPmaxIter+","+newStats+sO.dataDepMeth+","+model.weights.length+
-            ","+sO.lambda+","+bToS(sO.standardizeFeaturesByColumn)+","+bToS(sO.featUniqueIntensity)+","+bToS(sO.featAddSupSize)+","+sO.slicMinBlobSize)
-        //TODO need to add expID tag, maybe git Version 
-//test
+            ","+sO.lambda+","+bToS(sO.standardizeFeaturesByColumn)+","+bToS(sO.featUniqueIntensity)+","+bToS(sO.featAddSupSize)+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid))
+       
    
         
     val a=0
@@ -626,11 +625,15 @@ indexedTrainDataRDD
       val updatedCache = yAndCache._2
 
       // 3) Define the update quantities
-      val psi_i: Vector[Double] = phi(pattern, label) - phi(pattern, ystar_i) 
+      val psi_label =phi(pattern, label)
+      val psi_yStar_i =  phi(pattern, ystar_i)
+      val psi_i: Vector[Double] = psi_label - psi_yStar_i
       val w_s: Vector[Double] = psi_i :* (1.0 / (n * lambda))
       val loss_i: Double = lossFn(label, ystar_i)
       val ell_s: Double = (1.0 / n) * loss_i
 
+      
+      
       // 4) Get step-size gamma
       val gamma: Double =
         if (solverOptions.doLineSearch) {
@@ -650,12 +653,17 @@ indexedTrainDataRDD
               println("[WARNING] gamma_opt is zero, are you sure your oracleFn is not violating any assumptions ? ")
             }
           }
+          if(solverOptions.debug){
+            println("#OptmizeLog#,%d , %1.3e , %1.5e , %1.5e , %1.5e , %1.5e ".format(k,gamma_opt,max(0.0, min(1.0, gamma_opt)),loss_i,ell_s,norm(DenseVector(psi_i.toArray))))
+          }
           
           max(0.0, min(1.0, gamma_opt))
         } else {
           (2.0 * n) / (k + 2.0 * n)
         }
 
+      
+      
       val tempWeights1: Vector[Double] = localModel.getWeights() - w_i
       localModel.updateWeights(tempWeights1)
       val w_i_prime = w_i * (1.0 - gamma) + (w_s * gamma)
@@ -666,7 +674,23 @@ indexedTrainDataRDD
       val ell_i_prime = (ell_i * (1.0 - gamma)) + (ell_s * gamma)
       ell = ell + ell_i_prime
 
+      
+      if(solverOptions.debugWeightUpdate){
+        if(k==0){
+          println("#UpdateLog#,vect,k,"+(0 until psi_i.size).toArray.mkString(",c"))
+        }
+        println("#UpdateLog#,Psi_label,"+k+","+psi_label.toArray.mkString(","))
+        println("#UpdateLog#,Psi_yStar_i,"+k+","+psi_yStar_i.toArray.mkString(","))
+        println("#UpdateLog#,Psi_i,"+k+","+psi_i.toArray.mkString(","))
+        println("#UpdateLog#,W_localmodel,"+k+","+localModel.getWeights().toArray.mkString(","))
+        println("#UpdateLog#,W_s,"+k+","+w_s.toArray.mkString(","))
+        println("#UpdateLog#,W_i,"+k+","+w_i.toArray.mkString(","))
+        println("#UpdateLog#,W_i_prime,"+k+","+w_i_prime.toArray.mkString(","))
+        
+      }
       k += 1
+      
+      
 
       if (!dataIterator.hasNext) {
 

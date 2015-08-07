@@ -35,8 +35,10 @@ import scala.collection.mutable.HashSet
 import cc.factorie.infer.MaximizeByBPLoopy
 import cc.factorie.la.DenseTensor1
 import cc.factorie.la.Tensor
+import ch.ethz.dalab.dissolve.optimization.SolverOptions
+import scala.util.Random
 
-class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true, USE_MPLP:Boolean=false, USE_LOOPYBP:Boolean=false, loopyBPmaxIter:Int=10, alsoWeighLossAugByFreq:Boolean=false) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
+class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int, MF_LEARNING_RATE:Double=0.1, USE_MF:Boolean=false, MF_TEMP:Double=5.0,USE_NAIV_UNARY_MAX:Boolean=false, DEBUG_COMPARE_MF_FACTORIE:Boolean=false, MAX_DECODE_ITERATIONS_MF_ALT:Int, EXP_NAME:String="NoName", classFreqs:Map[Int,Double]=null,weighDownUnary:Double=1.0,weighDownPairwise:Double=1.0, LOSS_AUGMENTATION_OVERRIDE: Boolean=false, DISABLE_UNARY:Boolean=false, PAIRWISE_UPPER_TRI:Boolean=true, USE_MPLP:Boolean=false, USE_LOOPYBP:Boolean=false, loopyBPmaxIter:Int=10, alsoWeighLossAugByFreq:Boolean=false,sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]) extends DissolveFunctions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] with Serializable {
     
   type xData = GraphStruct[Vector[Double], (Int, Int, Int)]
   type yLabels = GraphLabels
@@ -51,7 +53,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
   
   assert (!(DISABLE_PAIRWISE&&DISABLE_UNARY), "Can not disable both pairwise and unary")
 
-  assert(USE_MF||USE_MPLP||USE_NAIV_UNARY_MAX||USE_LOOPYBP)
+  assert(USE_MF||USE_MPLP||USE_NAIV_UNARY_MAX||USE_LOOPYBP||sO.useRandomDecoding)
   println("GraphSegmentation::: (DISABLE_PAIRWISE= " + DISABLE_PAIRWISE + " )")
   //Convert the graph into one big feature vector 
   def featureFn(xDat: xData, yDat: yLabels): Vector[Double] = {
@@ -97,6 +99,21 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
    phi
   }
 
+  
+   final def sample[A](dist: Map[A, Double]): A = {
+  val p = scala.util.Random.nextDouble
+  val it = dist.iterator
+  var accum = 0.0
+  while (it.hasNext) {
+    val (item, itemProb) = it.next
+    accum += itemProb
+    if (accum >= p)
+      return item  // return so that we don't have to search through the whole distribution
+  }
+  sys.error(f"this should never happen")  // needed so it will compile
+}
+   
+   
   // Count pairwise occurances of classes. This is normalized on the outside 
   //TODO why do we recount this every round. cant we just cache it somewhere
   def getPairwiseFeatureMap(yi: yLabels, xi: xData): DenseMatrix[Double] = {
@@ -184,7 +201,12 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
         graph.getC(idx).foreach { neighbour =>
           {
-            if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
+           
+           val prune= if(sO.pairwiseModelPruneSomeEdges!=0.0)
+              Math.random() > sO.pairwiseModelPruneSomeEdges
+              else 
+                false
+            if (!prune && !nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
               nodePairsUsed.add((idx, neighbour))
               model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
                 val weights: DenseTensor1 = new DenseTensor1(thetaPairwise.toArray)
@@ -255,7 +277,11 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
 
         graph.getC(idx).foreach { neighbour =>
           {
-            if (!nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
+             val prune= if(sO.pairwiseModelPruneSomeEdges!=0.0)
+              Math.random() > sO.pairwiseModelPruneSomeEdges
+              else 
+                false
+            if (!prune && !nodePairsUsed.contains((idx, neighbour)) && !nodePairsUsed.contains((neighbour, idx))) { //This prevents adding neighbours twice 
               nodePairsUsed.add((idx, neighbour))
               model ++= new Factor2(labelParams(idx), labelParams(neighbour)) {
                 def score(i: Pixel#Value, j: Pixel#Value) = getPair(i.intValue, j.intValue)*weighDownPairwise
@@ -370,10 +396,14 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
      // val factD = decodeFn_sample(thetaUnary, thetaPairwise, xi, debug = false)
       val t0BP = System.currentTimeMillis()
       val bpD = decodeFn_BP(thetaUnary, thetaPairwise, xi, debug = false)
+      
      // println("#CMP Factorie BP< Ft(" +(t0BP-t00)+") BPt("+(System.currentTimeMillis()-t0BP)+") dif: " + lossFn(bpD, factD) +" >")
       
       bpD
       }
+    else if(sO.useRandomDecoding){
+      decodeFn_Random(xi,numClasses)
+    }
     else{
        decodeFn_MPLP(thetaUnary, thetaPairwise, xi, debug = false)
     }
@@ -405,6 +435,12 @@ counter+=1
 lastHash=thisyiHash
     return decoded
 
+  }
+  
+  def decodeFn_Random(graph: xData, numLabels:Int):yLabels={
+    
+    val labels =  if(classFreqs!=null){ (0 until graph.size).map(a=> sample[Int](classFreqs)) } else (0 until graph.size).map(a=>Random.nextInt(numLabels) )
+    new GraphLabels(Vector(labels.toArray),numLabels)
   }
 
   def halfEnergyOf(y:yLabels,thetaUnary: DenseMatrix[Double], thetaPairwise: DenseMatrix[Double], graph: xData ):Double = {

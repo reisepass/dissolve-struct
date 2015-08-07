@@ -10,7 +10,7 @@ import ch.ethz.dalab.dissolve.regression.LabeledObject
  */
 class OracleSpec extends UnitSpec {
 
-  val NUM_WEIGHT_VECS = 100 // = # times each test case is attempted
+  val NUM_WEIGHT_VECS = 30 // = # times each test case is attempted
   val EPSILON=(-0.00000001)
   // A sample datapoint
   val lo = data(0)
