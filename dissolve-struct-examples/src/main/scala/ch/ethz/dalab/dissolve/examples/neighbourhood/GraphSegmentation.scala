@@ -402,7 +402,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
       bpD
       }
     else if(sO.useRandomDecoding){
-      decodeFn_Random(xi,numClasses)
+        decodeFn_Random(xi,numClasses)
     }
     else{
        decodeFn_MPLP(thetaUnary, thetaPairwise, xi, debug = false)

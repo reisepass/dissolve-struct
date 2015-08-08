@@ -653,7 +653,7 @@ indexedTrainDataRDD
               println("[WARNING] gamma_opt is zero, are you sure your oracleFn is not violating any assumptions ? ")
             }
           }
-          if(solverOptions.debug){
+          if(solverOptions.debugWeightUpdate){
             println("#OptmizeLog#,%d , %1.3e , %1.5e , %1.5e , %1.5e , %1.5e ".format(k,gamma_opt,max(0.0, min(1.0, gamma_opt)),loss_i,ell_s,norm(DenseVector(psi_i.toArray))))
           }
           
