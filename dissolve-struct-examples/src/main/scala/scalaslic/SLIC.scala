@@ -520,6 +520,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
 
   }
 
+  
   def calcSimpleSquaresSupPix():Array[Array[Array[Int]]] = {
     assert(xDim > 0 & yDim > 0 & zDim > 0)
     val tt0 = System.currentTimeMillis()
@@ -727,6 +728,17 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
     }
     return (supPixSum, supPixCount)
   }
+  
+   def findEdges_simple_array(supPixelIdmask: Array[Array[Array[Int]]],numSuperPix:Int): Array[ scala.collection.mutable.Set[Int]] = {
+    val (centers,size) = findSupPixelCenterOfMassAndSize(supPixelIdmask)
+     val outAsMap=findEdges_simple(supPixelIdmask,centers)
+    val numSup=outAsMap.keySet.size
+    val keys = outAsMap.keySet.toArray.sorted
+    
+    val conn = Array.fill(numSuperPix){scala.collection.mutable.Set[Int]()}
+    keys.map(k => conn(k)=scala.collection.mutable.Set(outAsMap.get(k).get.toArray:_*))
+    conn
+   }
   def findEdges_simple(supPixelIdmask: Array[Array[Array[Int]]], centers: HashMap[Int, (Int, Int, Int)]): HashMap[Int, Set[Int]] = {
     val xDim = supPixelIdmask.length
     val yDim = supPixelIdmask(0).length

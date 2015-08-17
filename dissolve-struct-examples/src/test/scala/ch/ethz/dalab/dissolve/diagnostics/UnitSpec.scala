@@ -80,14 +80,14 @@ object ChainTestAdapter_G {
   sO.imageDataFilesDir=dataPath+"/Images"
     sO.groundTruthDataFilesDir=dataPath+"/GroundTruth"
    
-   import ch.ethz.dalab.dissolve.examples.neighbourhood.runMSRC._
+   import ch.ethz.dalab.dissolve.examples.neighbourhood.runReadTrainPredict._
   
   
   
   println (" Using this data: "+ dataPath)
   //TODO add features to this noise creator which makes groundTruth files just like those in getMSRC or getMSRCSupPix
   
-  val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genMSRCsupPixV3(sO,featFn3,afterFeatFn1)
+  val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genGraphFromImages(sO,featFn3,afterFeatFn1)
 
   val data = trainData.toArray
     

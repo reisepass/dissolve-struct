@@ -260,21 +260,25 @@ class DBCFWSolverTuned[X, Y](
        val w = DenseVector(model.weights.toArray) 
        norm(w) 
       }
-      def w_unaryNorm():Double={
+     def w_unaryNorm():Double={
           val w = DenseVector(model.weights.toArray) 
-        val pairwiseWlength = sO.numClasses*sO.numClasses* (if(sO.modelPairwiseDataDependent) sO.numDataDepGraidBins else 1)
+        val pairwiseWlength = if(sO.onlyUnary ) 0 else sO.numClasses*sO.numClasses* (if(sO.modelPairwiseDataDependent) sO.numDataDepGraidBins else 1)
         val unaryLeng = w.length-pairwiseWlength
         val unaryW=w(0 until unaryLeng)
         assert(unaryW.length == unaryLeng)
         norm(unaryW)
       }
       def w_pairWiseNorm():Double={
+        if(sO.onlyUnary )
+          -1.0
+        else{
         val w = DenseVector(model.weights.toArray) 
         val pairwiseWlength = sO.numClasses*sO.numClasses* (if(sO.modelPairwiseDataDependent) sO.numDataDepGraidBins else 1)
         val unaryLeng = w.length-pairwiseWlength
         val pairW=w(unaryLeng to -1)
         assert(pairW.length == pairwiseWlength)
         norm(pairW)
+        }
       }
       def w_maxPairWiseNorm():(Int,Double,Int,Double)={
         if(sO.modelPairwiseDataDependent){

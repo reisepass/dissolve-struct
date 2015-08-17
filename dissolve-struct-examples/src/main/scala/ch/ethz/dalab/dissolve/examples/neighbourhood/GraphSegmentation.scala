@@ -180,7 +180,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     for (idx <- 0 until labelParams.length) {
       model ++= new Factor1(labelParams(idx)) { 
           val weights: DenseTensor1 = new DenseTensor1(thetaUnary(idx, ::).t.toArray)
-        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)*weighDownUnary //TODO am i reading thetaUnary corectly here? Maybe its witched
+        def score(k: Pixel#Value) = thetaUnary(idx, k.intValue)*weighDownUnary 
         override def valuesScore(tensor: Tensor): Double = {
           weights dot tensor
         }

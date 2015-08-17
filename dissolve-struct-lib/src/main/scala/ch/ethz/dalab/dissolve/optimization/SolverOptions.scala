@@ -134,6 +134,7 @@ class SolverOptions[X, Y] extends Serializable {
   var featAddSupSize:Boolean = false;
   var pairwiseModelPruneSomeEdges:Double = 0.0;
   var useRandomDecoding:Boolean = false; 
+  var slicSimpleEdgeFinder:Boolean=false;
   
   
   

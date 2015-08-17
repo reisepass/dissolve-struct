@@ -46,7 +46,7 @@ import ch.ethz.dalab.dissolve.examples.neighbourhood.startupUtils._
 import ch.ethz.dalab.dissolve.optimization.SSGSolver
  
 
-object runMSRC {
+object runReadTrainPredict {
 
    
   
@@ -521,7 +521,7 @@ object runMSRC {
     if(sO.featAddSupSize)
       assert(sO.featUniqueIntensity,"If you set featAddSupSize to true you have to also set featUniqueIntensity to true")
     sO.pairwiseModelPruneSomeEdges= options.getOrElse("pairwiseModelPruneSomeEdges","0.0").toDouble
-    
+    sO.slicSimpleEdgeFinder = options.getOrElse("slicSimpleEdgeFinder","false").toBoolean
       
       
       
@@ -632,7 +632,7 @@ object runMSRC {
        
     
   
-   val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genMSRCsupPixV3(sO,featFn3,afterFeatFn1)
+   val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genGraphFromImages(sO,featFn3,afterFeatFn1)
     
     
    println("Train Size:"+trainData.size)
@@ -766,7 +766,7 @@ val bounds = quantileDataDepFn(uniqunessDataDep,numDataDepGraidBins,trainData);
     else{ // if ( dataDepUseUniquenessInOtherNeighbourhood )
 val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,trainData);
       (a:Node[Vector[Double]],b:Node[Vector[Double]])=>{ 
-      findBound(bounds,uniqunessDataDep(a,b))
+      findBound(bounds,uniqunessIfSwappedDataDep(a,b))
      }  
     }
     
@@ -856,7 +856,7 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
     
       }
      
-     avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction) //TODO change this so that it tests the original pixel labels 
+     avgTrainLoss += myGraphSegObj.lossFn(item.label, prediction)  
      val tFindLoss = System.currentTimeMillis()
     if(sO.compPerPixLoss)
        avgPerPixTrainLoss +=  GraphUtils.lossPerPixelInt(item.pattern.originMapFile, item.label.originalLabelFile,prediction,colorMap=colorlabelMap)

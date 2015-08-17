@@ -662,7 +662,7 @@ object predictWithW {
        
     
   
-   val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genMSRCsupPixV3(sO,featFn3,afterFeatFn1)
+   val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genGraphFromImages(sO,featFn3,afterFeatFn1)
     
     
    println("Train Size:"+trainData.size)

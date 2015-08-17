@@ -1000,7 +1000,7 @@ object startupUtils {
       return (training,test,colorToLabelMap.toMap,classFreq.toMap,outTransProb)
   }
    
-   def genMSRCsupPixV3 ( sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] , featureFn:(ImageStack,Array[Array[Array[Int]]],Int,SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>Array[Array[Double]] , afterFeatureFn:(ImageStack,Array[Array[Array[Int]]], IndexedSeq[Node[Vector[Double]]],Int,SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>Array[Node[Vector[Double]]] ):(Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]],SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] )={
+   def genGraphFromImages ( sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] , featureFn:(ImageStack,Array[Array[Array[Int]]],Int,SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>Array[Array[Double]] , afterFeatureFn:(ImageStack,Array[Array[Array[Int]]], IndexedSeq[Node[Vector[Double]]],Int,SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels])=>Array[Node[Vector[Double]]] ): (Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],Map[Int,Int],Map[Int,Double], Array[Array[Double]],SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels] )={
     
      
      val numClasses:Int= sO.numClasses
@@ -1183,10 +1183,7 @@ object startupUtils {
         
         val distFnCol = (a: (Int, Int, Int), b: (Int, Int, Int)) => sqrt(Math.pow(a._1 - b._1, 2) + Math.pow(a._2 - b._2, 2) + Math.pow(a._3 - b._3, 2))
         val sumFnCol =  (a: (Int, Int, Int), b: (Int, Int, Int)) => ((a._1 + b._1, a._2 + b._2, a._3 + a._3))
-        val normFnCol = (a: (Int, Int, Int), n: Int)             => {
-          
-                   
-          ((a._1 / n, a._2 / n, a._3 / n))}
+        val normFnCol = (a: (Int, Int, Int), n: Int)             => { ((a._1 / n, a._2 / n, a._3 / n))}
 
         val distFn = if(isColor) { 
           ( a:Int, b:Int) => distFnCol((colMod.getRed(a.asInstanceOf[Int]),colMod.getGreen(a.asInstanceOf[Int]),colMod.getBlue(a.asInstanceOf[Int])),(colMod.getRed(b.asInstanceOf[Int]),colMod.getGreen(b.asInstanceOf[Int]),colMod.getBlue(b.asInstanceOf[Int])))  
@@ -1263,7 +1260,7 @@ object startupUtils {
 
     val numSupPix = keys.size
     val tEdges2 = System.currentTimeMillis()
-    val edgeMap2 = allGr.findEdges_trueIter(mask,numSupPix)
+    val edgeMap2 =  if(sO.slicSimpleEdgeFinder) allGr.findEdges_simple_array(mask,numSupPix) else allGr.findEdges_trueIter(mask,numSupPix)
       println("Find Graph Connections time NEW: "+(System.currentTimeMillis()-tEdges2))
 
     val outEdgeMap = edgeMap2 //edgeMap
