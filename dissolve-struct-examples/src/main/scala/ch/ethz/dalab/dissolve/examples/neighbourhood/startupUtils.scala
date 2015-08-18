@@ -49,7 +49,7 @@ import ij.ImageStack
 import ij.IJ
 import ij.ImagePlus
 import scala.sys.process._
-
+import util.control.Breaks._
 
 
 /**
@@ -1122,9 +1122,53 @@ object startupUtils {
         sO.globalMean=globalMeanIntensity
         sO.globalVar =globalVariance
          
-         
         
-        val allData = for( fI <- 0 until allFiles.size) yield {
+        
+         
+        val allowedFiles =if(sO.filterOutImagesWithOnlyOneLabel){
+          
+          val filterCachePath = rawImgDir+"/filterCache"+"_" +runName+".filterCache"
+          if(new File(filterCachePath).exists()){
+             GraphUtils.readObjectFromFile[IndexedSeq[Int]](filterCachePath) 
+          }
+          else{
+          
+           val outIds= ( 0 until allFiles.size).map( fId => {
+        val fName = allFiles(fId)
+        val nameNoExt = fName.substring(0,fName.length()-4)
+        val rawImagePath =  rawImgDir+"/"+ fName
+        val msrcPath=groundTruthDir+"/"+ nameNoExt+"_GT"+extension
+        val groundTruthpath =  if((new File(msrcPath)).exists()) msrcPath else groundTruthDir+"/"+ nameNoExt+extension
+        val openerGT = new Opener();
+        val imgGT = openerGT.openImage(groundTruthpath);
+        val gtStack = imgGT.getStack
+        val xDim = gtStack.getWidth
+        val yDim = gtStack.getHeight
+        val zDim = gtStack.getSize
+        
+        val firstLabel = gtStack.getVoxel(0,0,0).asInstanceOf[Int]
+          var allSame = true
+          breakable{
+          for ( x <- 0 until xDim; y<- 0 until yDim; z<- 0 until zDim){
+            val curLab  = gtStack.getVoxel(x,y,z).asInstanceOf[Int]
+            if(curLab!=firstLabel){
+              allSame=false
+              break
+            }
+          }
+          
+          }
+          if(allSame) None else Some(fId)
+            }).flatten
+            GraphUtils.writeObjectToFile(filterCachePath, outIds)
+          outIds
+          }
+           }
+            else{
+              0 until allFiles.size
+            }
+        
+        val allData = for( fI <- allowedFiles) yield {
         val fName = allFiles(fI)
         val nameNoExt = fName.substring(0,fName.length()-4)
         val rawImagePath =  rawImgDir+"/"+ fName
@@ -1369,9 +1413,7 @@ object startupUtils {
           
          println("Total Preprocessing time for "+nameNoExt+" :"+(System.currentTimeMillis()-tStartPre))
          new LabeledObject[GraphStruct[breeze.linalg.Vector[Double], (Int, Int, Int)], GraphLabels](outLabels, outGraph)
-        
        }
-     
        }
      //loss greater than 1
      

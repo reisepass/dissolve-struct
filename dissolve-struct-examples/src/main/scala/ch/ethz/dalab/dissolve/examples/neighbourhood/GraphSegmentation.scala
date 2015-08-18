@@ -314,8 +314,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
   def oracleFn(model: StructSVMModel[xData, yLabels], xi: xData, yi: yLabels): yLabels = {
     
     
-    
-    
+
     
     
     val thisyiHash= if(yi!=null) yi.hashCode else 0
@@ -382,6 +381,7 @@ class GraphSegmentationClass(DISABLE_PAIRWISE:Boolean, MAX_DECODE_ITERATIONS:Int
     println("#MF_time:"+(t1_2-t1_1)+" MF_parTime:"+(t2_2-t2_1)+(if(deco1.equals(deco2))"and ARE SAME"else"and ARE DIF"));
     */
     
+            
     
     val decoded =   if(USE_MF){
             
@@ -487,7 +487,7 @@ lastHash=thisyiHash
         assert(pairwiseFeatureVec.size == numClasses * numClasses, "was ="+pairwiseFeatureVec.size  +" should have been= "+(numClasses * numClasses))
         pairwiseFeatureVec.toDenseMatrix.reshape(numClasses, numClasses)//TODO does this actually recover properly
       }
-     assert((unaryPot.size+pairwisePot.size)==weightVec.length)
+     assert((unaryPot.size+pairwisePot.size)==weightVec.length,"W ="+weightVec.length+" U_s="+unaryPot.size+" P_s="+pairwisePot.size)
     (unaryPot, pairwisePot)
   }
 

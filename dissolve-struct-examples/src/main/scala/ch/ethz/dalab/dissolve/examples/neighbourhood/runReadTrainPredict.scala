@@ -522,7 +522,7 @@ object runReadTrainPredict {
       assert(sO.featUniqueIntensity,"If you set featAddSupSize to true you have to also set featUniqueIntensity to true")
     sO.pairwiseModelPruneSomeEdges= options.getOrElse("pairwiseModelPruneSomeEdges","0.0").toDouble
     sO.slicSimpleEdgeFinder = options.getOrElse("slicSimpleEdgeFinder","false").toBoolean
-      
+    sO.filterOutImagesWithOnlyOneLabel = options.getOrElse("filterOutImagesWithOnlyOneLabel", "false").toBoolean
       
       
       
@@ -635,8 +635,12 @@ object runReadTrainPredict {
    val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genGraphFromImages(sO,featFn3,afterFeatFn1)
     
     
+   
+   
    println("Train Size:"+trainData.size)
     println("Test Size:"+testData.size)
+    
+    
     
      if (runLocally) {
        sO.testData=Some(testData)
@@ -664,7 +668,17 @@ object runReadTrainPredict {
       
     }
     
+    //Print transition probability
     
+     println(" -------------- Stat: Class Transition probability ----------------------")
+              for(r<- 0 until transProb.length ){
+                for( c<- 0 until transProb(0).length){
+                print("\t,%1.3e".format(transProb(r)(c)))
+              }
+                print("\n")
+            }
+    
+     println("Internal Class Freq:  \t"+classFreqFound)
     
      if(sO.initWithEmpiricalTransProb){
       val featureSize =trainData(0).pattern.getF(0).size
@@ -828,6 +842,17 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
     var avgPerPixTrainLoss = 0.0
     var count=0
     val invColorMap = colorlabelMap.map(_.swap)
+    
+    //Debug stuff
+         println(" -------------- Stat: Class Transition probability ----------------------")
+              for(r<- 0 until transProb.length ){
+                for( c<- 0 until transProb(0).length){
+                print("\t,%1.3e".format(transProb(r)(c)))
+              }
+                print("\n")
+            }
+    
+    
     
     for (item <- trainData) {
       val prediction = model.predict(item.pattern)

@@ -135,6 +135,7 @@ class SolverOptions[X, Y] extends Serializable {
   var pairwiseModelPruneSomeEdges:Double = 0.0;
   var useRandomDecoding:Boolean = false; 
   var slicSimpleEdgeFinder:Boolean=false;
+  var filterOutImagesWithOnlyOneLabel:Boolean=false;
   
   
   
