@@ -829,9 +829,9 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
     
     sO.testDataRDD =
       if (sO.enableManualPartitionSize)
-        Some(sc.parallelize(trainData, sO.NUM_PART))
+        Some(sc.parallelize(testData, sO.NUM_PART))
       else
-        Some(sc.parallelize(trainData))
+        Some(sc.parallelize(testData))
 
     val trainDataRDD =
       if (sO.enableManualPartitionSize)
