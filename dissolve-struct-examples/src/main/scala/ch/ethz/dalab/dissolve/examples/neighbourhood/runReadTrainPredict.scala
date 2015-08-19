@@ -639,14 +639,19 @@ object runReadTrainPredict {
      
      
      def removeInt[AType](i: Int, li: List[AType]) = {
-         val (left, right) = li.span(_ != i)
-         left ::: right.drop(1)
+         val (left, right) = li.splitAt(i)
+         if(right.length==0)
+           left.drop(left.length-1) ::: right
+        else
+          left ::: right.drop(1)
       }
     
      for( leaveOut <- 0 until min(trainData.size,sO.leaveOutCVmaxIter) ){
        sO.curLeaveOutIteration=leaveOut;
        newSo.curLeaveOutIteration=leaveOut;
-       runOnThisData(sO,removeInt(leaveOut,trainData.toList).toSeq,Seq(trainData(leaveOut)), colorlabelMap, classFreqFound,transProb, newSo)
+       val splitTrain=removeInt(leaveOut,trainData.toList).toSeq
+       val splitTest =Seq(trainData(leaveOut))
+       runOnThisData(sO,splitTrain,splitTest, colorlabelMap, classFreqFound,transProb, newSo)
      }
    }
    else{
@@ -658,7 +663,7 @@ object runReadTrainPredict {
    
    
    println("Train Size:"+trainData.size)
-    println("Test Size:"+testData.size)
+   println("Test Size:"+testData.size)
     
     
     
