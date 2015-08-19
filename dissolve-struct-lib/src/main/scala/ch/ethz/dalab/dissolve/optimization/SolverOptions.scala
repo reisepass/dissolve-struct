@@ -136,8 +136,9 @@ class SolverOptions[X, Y] extends Serializable {
   var useRandomDecoding:Boolean = false; 
   var slicSimpleEdgeFinder:Boolean=false;
   var filterOutImagesWithOnlyOneLabel:Boolean=false;
-  
-  
+  var leaveOneOutCrossVal:Boolean=false;
+  var curLeaveOutIteration:Int = -1;
+  var leaveOutCVmaxIter:Int = Integer.MAX_VALUE
   
   
   

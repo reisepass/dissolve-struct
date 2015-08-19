@@ -347,6 +347,7 @@ object runReadTrainPredict {
   
   
   
+  
   def runStuff(options: Map[String, String]) {
     //
     //TODO Remove debug
@@ -523,9 +524,10 @@ object runReadTrainPredict {
     sO.pairwiseModelPruneSomeEdges= options.getOrElse("pairwiseModelPruneSomeEdges","0.0").toDouble
     sO.slicSimpleEdgeFinder = options.getOrElse("slicSimpleEdgeFinder","false").toBoolean
     sO.filterOutImagesWithOnlyOneLabel = options.getOrElse("filterOutImagesWithOnlyOneLabel", "false").toBoolean
-      
-      
-      
+    sO.leaveOneOutCrossVal = options.getOrElse("leaveOneOutCrossVal","false").toBoolean
+    if(sO.leaveOneOutCrossVal)
+      sO.trainTestEqual=true
+    sO.leaveOutCVmaxIter = options.getOrElse("leaveOutCVmaxIter","2147483647").toInt
       
     /**
      * Some local overrides
@@ -633,7 +635,25 @@ object runReadTrainPredict {
     
   
    val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genGraphFromImages(sO,featFn3,afterFeatFn1)
+   if(sO.leaveOneOutCrossVal){
+     
+     
+     def removeInt[AType](i: Int, li: List[AType]) = {
+         val (left, right) = li.span(_ != i)
+         left ::: right.drop(1)
+      }
     
+     for( leaveOut <- 0 until min(trainData.size,sO.leaveOutCVmaxIter) ){
+       sO.curLeaveOutIteration=leaveOut;
+       newSo.curLeaveOutIteration=leaveOut;
+       runOnThisData(sO,removeInt(leaveOut,trainData.toList).toSeq,Seq(trainData(leaveOut)), colorlabelMap, classFreqFound,transProb, newSo)
+     }
+   }
+   else{
+     runOnThisData(sO,trainData,testData, colorlabelMap, classFreqFound,transProb, newSo)
+   }
+    
+   def runOnThisData(sO:SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels],trainData: Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]],testData: Seq[LabeledObject[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]], colorlabelMap: Map[Int, Int], classFreqFound: Map[Int, Double], transProb: Array[Array[Double]],newSo: SolverOptions[GraphStruct[Vector[Double], (Int, Int, Int)], GraphLabels]){
     
    
    
@@ -992,11 +1012,13 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
         sO.dataGenCanvasSize,sO.learningRate,if(sO.useMF)"t"else"f",sO.numClasses,MAX_DECODE_ITERATIONS,if(sO.onlyUnary)"t"else"f",
         if(sO.debug)"t"else"f",sO.roundLimit,if(sO.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,sO.dataRandSeed , 
         if(sO.useMSRC) "t" else "f", if(sO.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(sO.trainTestEqual)"t" else "f" , 
-        sO.dataSetName )+newLabels+evenMore+","+bToS(sO.featAddSupSize )+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid)  ) 
+        sO.dataSetName )+newLabels+evenMore+","+bToS(sO.featAddSupSize )+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid)+","+sO.curLeaveOutIteration  ) 
         
   
     sc.stop()
 
+  }
+   
   }
 
 }

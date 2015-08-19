@@ -340,7 +340,7 @@ class DBCFWSolverTuned[X, Y](
             sO.dataGenHowMany,sO.slicCompactness,bToS(sO.putLabelIntoFeat),sO.dataAddedNoise
             )+","+(if(sO.modelPairwiseDataDependent) "t" else "f")+","+(if(sO.featIncludeMeanIntensity) "t" else "f")+","+bToS(sO.featAddOffsetColumn)+
             ","+bToS(sO.featAddIntensityVariance)+","+bToS(sO.featNeighHist)+","+ sO.numDataDepGraidBins+","+sO.loopyBPmaxIter+","+newStats+sO.dataDepMeth+","+model.weights.length+
-            ","+sO.lambda+","+bToS(sO.standardizeFeaturesByColumn)+","+bToS(sO.featUniqueIntensity)+","+bToS(sO.featAddSupSize)+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid))
+            ","+sO.lambda+","+bToS(sO.standardizeFeaturesByColumn)+","+bToS(sO.featUniqueIntensity)+","+bToS(sO.featAddSupSize)+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid)+","+sO.curLeaveOutIteration)
        
    
         
