@@ -139,6 +139,7 @@ class SolverOptions[X, Y] extends Serializable {
   var leaveOneOutCrossVal:Boolean=false;
   var curLeaveOutIteration:Int = -1;
   var leaveOutCVmaxIter:Int = Integer.MAX_VALUE
+  var numberOfCoresToUse:Int = -1;
   
   
   

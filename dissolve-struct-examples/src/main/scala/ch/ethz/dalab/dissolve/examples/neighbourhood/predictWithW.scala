@@ -512,15 +512,20 @@ object predictWithW {
     sO.recompFeat=options.getOrElse("recompFeat","false").toBoolean
     sO.featUnique2Hop=options.getOrElse("featUnique2Hop","false").toBoolean
     sO.featUniqueIntensity = options.getOrElse("featUniqueIntensity","false").toBoolean
+    
     sO.dataDepUseIntensity=options.getOrElse("dataDepUseIntensity","false").toBoolean
     if(sO.dataDepUseIntensity)
       sO.dataDepMeth="dataDepUseIntensity"
     sO.dataDepUseIntensityByNeighSD=options.getOrElse("dataDepUseIntensityByNeighSD","false").toBoolean
     if(sO.dataDepUseIntensityByNeighSD)
       sO.dataDepMeth="dataDepUseIntensityByNeighSD"
+    if(sO.dataDepUseIntensityByNeighSD)
+      assert(sO.featAddIntensityVariance)
     sO.dataDepUseIntensityBy2NeighSD=options.getOrElse("dataDepUseIntensityBy2NeighSD","false").toBoolean
     if(sO.dataDepUseIntensityBy2NeighSD)
       sO.dataDepMeth="dataDepUseIntensityBy2NeighSD"
+    if(sO.dataDepUseIntensityBy2NeighSD)
+      assert(sO.featAddIntensityVariance)
     sO.dataDepUseUniqueness=options.getOrElse("dataDepUseUniqueness","false").toBoolean
     if(sO.dataDepUseUniqueness)
       sO.dataDepMeth="dataDepUseUniqueness"

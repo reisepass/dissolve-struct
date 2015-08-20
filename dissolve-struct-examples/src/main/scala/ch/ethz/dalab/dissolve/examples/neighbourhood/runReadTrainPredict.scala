@@ -528,7 +528,12 @@ object runReadTrainPredict {
     if(sO.leaveOneOutCrossVal)
       sO.trainTestEqual=true
     sO.leaveOutCVmaxIter = options.getOrElse("leaveOutCVmaxIter","2147483647").toInt
-      
+    sO.numberOfCoresToUse = options.getOrElse("numberOfCoresToUse","-1").toInt
+    
+    val cores = Runtime.getRuntime().availableProcessors();
+    if(sO.numberOfCoresToUse != cores){
+      println("#WARNING# are you sure you dont want to use all your cores? was "+sO.numberOfCoresToUse +"Change to numberOfCoresToUse="+cores)
+    }
     /**
      * Some local overrides
      */
@@ -539,7 +544,7 @@ object runReadTrainPredict {
       sO.stoppingCriterion = RoundLimitCriterion
       //solverOptions.roundLimit = 2
       sO.enableManualPartitionSize = true
-      sO.NUM_PART = 1
+      sO.NUM_PART = sO.numberOfCoresToUse
       sO.doWeightedAveraging = false
       
       //solverOptions.debug = true
@@ -732,7 +737,7 @@ object runReadTrainPredict {
 
     val conf =
       if (runLocally)
-        new SparkConf().setAppName(appName).setMaster("local")
+        new SparkConf().setAppName(appName).setMaster(if(sO.numberOfCoresToUse==(-1)) "local" else "local["+sO.numberOfCoresToUse+"]")
       else
         new SparkConf().setAppName(appName)
 
