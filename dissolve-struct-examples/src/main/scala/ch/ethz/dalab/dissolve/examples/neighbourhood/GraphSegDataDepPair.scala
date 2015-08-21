@@ -219,7 +219,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
     }
 
    
-    if(counter<1) println("nodePairsFound" +nodePairsUsed.size+" Input thetaUnary("+thetaUnary.rows+","+thetaUnary.cols+")/nFactor Graph Size: "+model.factors.size)//TODO remove 
+    
      
     myLoopyBP.maximize(labelParams,model)
     val mapLabelsBP: Array[Int] = (0 until numRegions).map {
@@ -236,8 +236,6 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
   }
 
   
-  var counter =0; //TODO REMOVE 
-  var lastHash:Int=0;
   
   def computeConnectionGradient(xi:xData):Array[Map[Int,Int]]={
     
@@ -256,7 +254,7 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
     
     
     
-    
+    val oracleT0 = System.currentTimeMillis()
     
     val thisyiHash= if(yi!=null) yi.hashCode else 0
     val numClasses = model.numClasses
@@ -307,29 +305,24 @@ class GraphSegDataDepPair(dataDepBinFn:((Node[Vector[Double]],Node[Vector[Double
     /**
      * Parameter estimation
      */
-    val startTime = System.currentTimeMillis()
+    val decodOn = System.currentTimeMillis()
    
     
     
   
    
-      val t00 = System.currentTimeMillis()
-     // val factD = decodeFn_sample(thetaUnary, thetaPairwise, xi, debug = false)
-      val t0BP = System.currentTimeMillis()
       val decoded = decodeFn_BP(thetaUnary, thetaPairwise, xi,connectionGradient)
-     // println("#CMP Factorie BP< Ft(" +(t0BP-t00)+") BPt("+(System.currentTimeMillis()-t0BP)+") dif: " + lossFn(bpD, factD) +" >")
+     
       
       
     
     
     
     
-    val decodeTimeMillis = System.currentTimeMillis() - startTime
-
-  
+    val orEnd = System.currentTimeMillis()
+    if(sO.logOracleTiming)
+       println("#O#,%d,%d,%d,%d,%s,%d,%d,%d,%d".format(sO.startTime,oracleT0-sO.startTime,orEnd-oracleT0,orEnd-decodOn,sO.runName,sO.dbcfwSeed,sO.randSeed,sO.numberOfCoresToUse,sO.NUM_PART))
     
-counter+=1
-lastHash=thisyiHash
     return decoded
   }
 

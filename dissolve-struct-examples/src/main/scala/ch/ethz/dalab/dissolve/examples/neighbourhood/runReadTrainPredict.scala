@@ -413,7 +413,7 @@ object runReadTrainPredict {
     sO.randSeed = options.getOrElse("oldRandSeed","42").toInt
     sO.sampleWithReplacement = options.getOrElse("samplewithreplacement", "false").toBoolean
     sO.enableManualPartitionSize = options.getOrElse("manualrddpart", "false").toBoolean
-    sO.NUM_PART = options.getOrElse("numpart", "2").toInt
+    sO.NUM_PART = options.getOrElse("NUM_PART", "1").toInt
     sO.enableOracleCache = options.getOrElse("enableoracle", "false").toBoolean
     sO.oracleCacheSize = options.getOrElse("oraclesize", "5").toInt
     sO.useClassFreqWeighting =  options.getOrElse("weightedClassFreq","false").toBoolean
@@ -529,6 +529,7 @@ object runReadTrainPredict {
       sO.trainTestEqual=true
     sO.leaveOutCVmaxIter = options.getOrElse("leaveOutCVmaxIter","2147483647").toInt
     sO.numberOfCoresToUse = options.getOrElse("numberOfCoresToUse","-1").toInt
+    sO.logOracleTiming = options.getOrElse("logOracleTiming","false").toBoolean
     
     val cores = Runtime.getRuntime().availableProcessors();
     if(sO.numberOfCoresToUse != cores){
@@ -544,7 +545,6 @@ object runReadTrainPredict {
       sO.stoppingCriterion = RoundLimitCriterion
       //solverOptions.roundLimit = 2
       sO.enableManualPartitionSize = true
-      sO.NUM_PART = sO.numberOfCoresToUse
       sO.doWeightedAveraging = false
       
       //solverOptions.debug = true
@@ -638,8 +638,10 @@ object runReadTrainPredict {
     }
        
     
-  
+   val beforeReadFiles=System.currentTimeMillis()
    val (trainData,testData, colorlabelMap, classFreqFound,transProb, newSo) = genGraphFromImages(sO,featFn3,afterFeatFn1)
+   val afterReadFIles =System.currentTimeMillis()
+   val preProcessingTime=afterReadFIles-beforeReadFiles
    if(sO.leaveOneOutCrossVal){
      
      
@@ -1022,7 +1024,8 @@ val bounds = quantileDataDepFn(uniqunessIfSwappedDataDep,numDataDepGraidBins,tra
         sO.dataGenCanvasSize,sO.learningRate,if(sO.useMF)"t"else"f",sO.numClasses,MAX_DECODE_ITERATIONS,if(sO.onlyUnary)"t"else"f",
         if(sO.debug)"t"else"f",sO.roundLimit,if(sO.dataWasGenerated)"t"else"f",avgTestLoss,avgTrainLoss,sO.dataRandSeed , 
         if(sO.useMSRC) "t" else "f", if(sO.useNaiveUnaryMax)"t"else"f" ,avgPerPixTestLoss,avgPerPixTrainLoss, if(sO.trainTestEqual)"t" else "f" , 
-        sO.dataSetName )+newLabels+evenMore+","+bToS(sO.featAddSupSize )+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid)+","+sO.curLeaveOutIteration  ) 
+        sO.dataSetName )+newLabels+evenMore+","+bToS(sO.featAddSupSize )+","+sO.slicMinBlobSize+","+bToS(sO.optimizeWithSubGraid)+","+sO.curLeaveOutIteration +
+        ","+sO.numberOfCoresToUse+","+sO.NUM_PART+","+preProcessingTime) 
         
   
     sc.stop()
