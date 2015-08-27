@@ -81,7 +81,7 @@ object startupUtils {
      sys.process.Process(Seq("mkdir","backup/GroundTruth"),workingDir).!!
      sys.process.Process(Seq("bash","-c","mv Images/* backup/Images/"),workingDir).!!
      sys.process.Process(Seq("bash","-c","mv GroundTruth/* backup/GroundTruth/"),workingDir).!!
-     sys.process.Process(Seq("bash","-c","mv *.cfg backup/"),workingDir).!!
+     
      
    val lotsofTIFF =  Option(new File(rawImgDir+"/../backup/Images").list).map(_.filter(_.endsWith(".tif"))).get
      assert(lotsofTIFF!=null&&lotsofTIFF.size>0, "Did not find any .tif images in this directory. Rename tiff to tif if needed")
@@ -102,10 +102,13 @@ object startupUtils {
         val xDim = rawStack.getWidth
         val yDim = rawStack.getHeight
         val zDim = rawStack.getSize
-        val groundTruthpath =  groundTruthDir+"/../backup/GroundTruth/"+ nameNoExt+"_GT"+".tif"
+        //val groundTruthpath =  groundTruthDir+"/../backup/GroundTruth/"+ nameNoExt+"_GT"+".tif"
+           val msrcPath=groundTruthDir+"/../backup/GroundTruth/"+nameNoExt+"_GT"+".tif"
+        val groundTruthpath =  if((new File(msrcPath)).exists()) msrcPath else groundTruthDir+"/../backup/GroundTruth/"+ nameNoExt+".tif"
+     
         val openerGT = new Opener();
         val imgGT = openerGT.openImage(groundTruthpath);
-        
+        println("Now Splitting "+groundTruthpath)
         val gtStack = imgGT.getStack
         assert(xDim==gtStack.getWidth)
         assert(yDim==gtStack.getHeight)

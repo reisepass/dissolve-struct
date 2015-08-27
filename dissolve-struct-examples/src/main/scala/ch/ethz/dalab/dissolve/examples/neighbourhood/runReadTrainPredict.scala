@@ -530,6 +530,8 @@ object runReadTrainPredict {
     sO.leaveOutCVmaxIter = options.getOrElse("leaveOutCVmaxIter","2147483647").toInt
     sO.numberOfCoresToUse = options.getOrElse("numberOfCoresToUse","-1").toInt
     sO.logOracleTiming = options.getOrElse("logOracleTiming","false").toBoolean
+    sO.spark_driver_memory = options.getOrElse("spark_driver_memory","")
+    
     
     val cores = Runtime.getRuntime().availableProcessors();
     if(sO.numberOfCoresToUse != cores){
@@ -747,6 +749,12 @@ object runReadTrainPredict {
     sc.setCheckpointDir(debugDir + "/checkpoint-files")
 
     println(SolverUtils.getSparkConfString(sc.getConf))
+    
+    if(sO.spark_driver_memory.length>0){
+      sc.getConf.set("spark.driver.memory", sO.spark_driver_memory)
+    }
+    
+    
 
     
     

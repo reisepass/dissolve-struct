@@ -456,7 +456,7 @@ class SLIC[DataType](distFn: (DataType, DataType) => Double,
 
   def enforceConnectivity_I(oldLabels: Array[Array[Array[Int]]], minBlobSize: Int): Array[Array[Array[Int]]] = {
 
-    //The below is designed to mick related C++ code and hance uses alot of state 
+    //The below is designed to mimick related C++ code and hance uses alot of state 
     val xDim = oldLabels.size
     val yDim = oldLabels(0).size
     val zDim = oldLabels(0)(0).size

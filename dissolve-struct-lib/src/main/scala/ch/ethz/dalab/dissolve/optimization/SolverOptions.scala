@@ -65,9 +65,9 @@ class SolverOptions[X, Y] extends Serializable {
   var initWithEmpiricalTransProb= false
   var initWeight= Array.fill(0){0.0}
   var LOSS_AUGMENTATION_OVERRIDE = false
-  var putLabelIntoFeat = false
-  var useMSRC = false
-  var generateMSRCSupPix = false
+  var putLabelIntoFeat = false //defunc
+  var useMSRC = false //defunc
+  var generateMSRCSupPix = false //defunc
   var squareSLICoption=false
   var useNaiveUnaryMax = false
   var trainTestEqual=false
@@ -128,7 +128,7 @@ class SolverOptions[X, Y] extends Serializable {
   
   var loopyBPmaxIter:Int=10;
   var numDataDepGraidBins:Int=5;
-  var alsoWeighLossAugByFreq:Boolean=false;
+  var alsoWeighLossAugByFreq:Boolean=true;
   var splitImagesBy:Int=(-1);
   var optimizeWithSubGraid:Boolean = false;
   var featAddSupSize:Boolean = false;
@@ -141,6 +141,7 @@ class SolverOptions[X, Y] extends Serializable {
   var leaveOutCVmaxIter:Int = Integer.MAX_VALUE
   var numberOfCoresToUse:Int = -1;
   var logOracleTiming:Boolean = false;
+  var spark_driver_memory:String = "";
   
   
   

@@ -17,7 +17,6 @@ import ch.ethz.dalab.dissolve.classification.Types.BoundedCacheList
 import ch.ethz.dalab.dissolve.classification.Types.Index
 import ch.ethz.dalab.dissolve.classification.Types.PrimalInfo
 import ch.ethz.dalab.dissolve.regression.LabeledObject
-import org.apache.spark.mllib.linalg.DenseVector
 
 /**
  * Train a structured SVM using the actual distributed dissolve^struct solver.
