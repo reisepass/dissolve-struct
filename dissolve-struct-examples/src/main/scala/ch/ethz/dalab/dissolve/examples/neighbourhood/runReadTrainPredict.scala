@@ -376,6 +376,9 @@ object runReadTrainPredict {
 
     val dataDir: String = options.getOrElse("datadir", "../data/generated")
     val debugDir: String = options.getOrElse("debugdir", "../debug")
+    val checkDebugDir = new File(debugDir)
+    if(!checkDebugDir.exists())
+      "mkdir "+debugDir
     val runLocally: Boolean = options.getOrElse("local", "false").toBoolean
     val PERC_TRAIN: Double = 0.05 // Restrict to using a fraction of data for training (Used to overcome OutOfMemory exceptions while testing locally)
 
