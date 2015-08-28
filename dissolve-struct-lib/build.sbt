@@ -6,11 +6,11 @@ version := "0.1-SNAPSHOT"
 
 scalaVersion := "2.10.4"
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % "1.2.1"
+libraryDependencies += "org.apache.spark" %% "spark-core" % "1.4.1"
 
-libraryDependencies += "org.apache.spark" %% "spark-mllib" % "1.2.1"
+libraryDependencies += "org.apache.spark" %% "spark-mllib" % "1.4.1"
 
-libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
+//libraryDependencies += "org.scalanlp" %% "breeze" % "0.11.2"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.10" % "2.0" % "test"
 

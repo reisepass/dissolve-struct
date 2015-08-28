@@ -18,9 +18,9 @@ libraryDependencies += "gov.nih.imagej" % "imagej" % "1.46"
 
 libraryDependencies += "org.parboiled" %% "parboiled" % "2.1.0"
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % "1.2.1"
+libraryDependencies += "org.apache.spark" %% "spark-core" % "1.4.1"
 
-libraryDependencies += "org.apache.spark" %% "spark-mllib" % "1.2.1"
+libraryDependencies += "org.apache.spark" %% "spark-mllib" % "1.4.1"
 
 resolvers += "IESL Release" at "http://dev-iesl.cs.umass.edu/nexus/content/groups/public"
 
@@ -31,5 +31,20 @@ libraryDependencies += "com.github.scopt" %% "scopt" % "3.3.0"
 resolvers += Resolver.sonatypeRepo("public")
 
 EclipseKeys.createSrc := EclipseCreateSrc.Default + EclipseCreateSrc.Resource
+
+
+mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
+    {
+        case PathList("javax", "servlet", xs @ _*)           => MergeStrategy.first
+        case PathList(ps @ _*) if ps.last endsWith ".html"   => MergeStrategy.first
+        case "application.conf"                              => MergeStrategy.concat
+        case "reference.conf"                                => MergeStrategy.concat
+        case "log4j.properties"                              => MergeStrategy.discard
+        case m if m.toLowerCase.endsWith("manifest.mf")      => MergeStrategy.discard
+        case m if m.toLowerCase.matches("meta-inf.*\\.sf$")  => MergeStrategy.discard
+        case _ => MergeStrategy.first
+    }
+}
+
 
 test in assembly := {}
